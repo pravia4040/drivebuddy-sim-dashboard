@@ -433,6 +433,15 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
         <button class="slot-x" id="sx-rv" style="display:none" onclick="clearSlot(event,'rv')">✕</button>
       </div>
     </div>
+
+    <!-- Snapshot date picker -->
+    <div style="background:#141414;border:1px solid #1f1f1f;border-radius:10px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">
+        <div class="sec-ey" style="margin-bottom:4px">📅 Snapshot Date</div>
+        <div style="font-size:11px;color:var(--gr)">The date this data represents (when it was exported from the SIM portal). Defaults to today.</div>
+      </div>
+      <input type="date" id="rt-snapshot-date-input" class="fsel" style="padding:8px 12px;font-family:'Roboto',monospace;color-scheme:dark">
+    </div>
   </div>
 
   <div class="proc-bar" id="proc-bar" style="display:none">
@@ -720,7 +729,14 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 <!-- REAL-TIME USAGE PANEL -->
 <div id="panel-realtime" class="panel">
   <div class="sec-hdr">
-    <div><div class="sec-ey">SIM Portal Live Data</div><div class="sec-title">Real-time Data Allocation &amp; Usage</div></div>
+    <div>
+      <div class="sec-ey">SIM Portal Live Data</div>
+      <div class="sec-title">Real-time Data Allocation &amp; Usage</div>
+      <div id="rt-snapshot-info" style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr);margin-top:4px;display:none">📅 Snapshot: <span id="rt-snapshot-date">—</span></div>
+    </div>
+    <select class="fsel" id="rt-snapshot-sel" onchange="rtLoadSnapshot(this.value)" style="display:none" title="Select snapshot date">
+      <option value="">Loading…</option>
+    </select>
     <input class="srch" id="rt-srch" placeholder="Search SIM / plan / reg…" oninput="filterRT()">
     <select class="fsel" id="rt-plan" onchange="filterRT()"><option value="">All Plans</option></select>
     <select class="fsel" id="rt-sort" onchange="filterRT()">
@@ -1098,9 +1114,21 @@ function processRealtime(){
   setTimeout(()=>{
     document.getElementById('proc-bar').style.display='none';
     closeModal();
+    // Read the snapshot date picker so we can show it immediately
+    const dateInput=document.getElementById('rt-snapshot-date-input');
+    if(dateInput&&dateInput.value){
+      document.getElementById('rt-snapshot-info').style.display='';
+      const d=new Date(dateInput.value);
+      document.getElementById('rt-snapshot-date').textContent=d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+    }
     renderRT();        // Render the data first
     showTab('realtime'); // Then switch to the tab (which also calls renderRT)
     showToast(`✅ ${rtRows.length} SIMs loaded · ${rtRows.length-unmatched} matched to vehicles`,'success');
+    // Auto-push to cloud if we're in edit mode and Supabase is ready
+    if(EDIT_MODE&&sb){
+      console.log('[realtime] Auto-syncing to cloud after upload…');
+      setTimeout(()=>cloudPushRealtime(),800);
+    }
   },300);
 }
 
@@ -1658,6 +1686,16 @@ function setUploadMode(m){
   document.getElementById('single-mode-ui').style.display=m==='single'?'':'none';
   document.getElementById('multi-mode-ui').style.display=m==='multi'?'':'none';
   document.getElementById('realtime-mode-ui').style.display=m==='realtime'?'':'none';
+  // Default snapshot date to today when opening realtime mode
+  if(m==='realtime'){
+    const inp=document.getElementById('rt-snapshot-date-input');
+    if(inp&&!inp.value){
+      const t=new Date();
+      const today=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+      inp.value=today;
+      inp.max=today; // disallow future dates
+    }
+  }
   checkProcBtn();
 }
 
@@ -2233,15 +2271,76 @@ async function cloudPushVehicles(){
 async function cloudPushRealtime(){
   if(!sb||!rtRows.length){showToast('No real-time data loaded','error');return;}
   const btn=document.getElementById('cloud-push-rt-btn');
-  btn.disabled=true;btn.textContent='⏳ Uploading…';
+  if(btn){btn.disabled=true;btn.textContent='⏳ Uploading…';}
   try{
-    const rec={id:1,data:rtRows,uploaded_at:new Date().toISOString()};
-    const {error}=await sb.from('realtime_snapshot').upsert(rec,{onConflict:'id'});
-    if(error)throw error;
-    showToast(`✅ ${rtRows.length} SIMs saved to cloud`,'success');
+    // Read snapshot date from the picker (set during upload). Default = now.
+    let snapshotDate=new Date().toISOString();
+    const dateInput=document.getElementById('rt-snapshot-date-input');
+    if(dateInput&&dateInput.value){
+      // Combine the picked date with current time so we keep ordering of same-day uploads
+      const now=new Date();
+      const picked=new Date(dateInput.value+'T'+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0'));
+      if(!isNaN(picked.getTime()))snapshotDate=picked.toISOString();
+    }
+    // Insert new dated snapshot (NOT upsert — we want history)
+    const rec={snapshot_date:snapshotDate,sim_count:rtRows.length,data:rtRows,uploaded_at:new Date().toISOString()};
+    let {error}=await sb.from('realtime_snapshots').insert(rec);
+
+    // Fallback: if new table doesn't exist yet, upsert into old single-row table
+    if(error&&error.message&&error.message.includes('realtime_snapshots')){
+      console.warn('[cloud] realtime_snapshots table not found, falling back to legacy table');
+      const legacyRec={id:1,data:rtRows,uploaded_at:snapshotDate};
+      const r2=await sb.from('realtime_snapshot').upsert(legacyRec,{onConflict:'id'});
+      if(r2.error)throw r2.error;
+      showToast(`✅ ${rtRows.length} SIMs saved to cloud · Run the new SQL to enable date history (see console)`,'success');
+    }else if(error){
+      throw error;
+    }else{
+      // Update the panel header to show the picked snapshot date right away
+      document.getElementById('rt-snapshot-info').style.display='';
+      const d=new Date(snapshotDate);
+      document.getElementById('rt-snapshot-date').textContent=d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+      showToast(`✅ ${rtRows.length} SIMs saved · Snapshot date: ${d.toLocaleDateString('en-IN')}`,'success');
+      await rtLoadAvailableSnapshots();
+    }
     await cloudRefresh();
   }catch(e){console.error(e);showToast('❌ '+e.message,'error');}
-  finally{btn.disabled=false;btn.textContent='⚡ Push Real-time Snapshot';}
+  finally{if(btn){btn.disabled=false;btn.textContent='⚡ Push Real-time Snapshot';}}
+}
+
+// Fetch list of available snapshots for the date dropdown
+async function rtLoadAvailableSnapshots(){
+  if(!sb)return;
+  try{
+    const {data,error}=await sb.from('realtime_snapshots').select('id,snapshot_date,sim_count,uploaded_at').order('snapshot_date',{ascending:false}).limit(60);
+    if(error){console.warn('[realtime] snapshot history unavailable:',error.message);return;}
+    if(!data||!data.length)return;
+    const sel=document.getElementById('rt-snapshot-sel');
+    sel.style.display='';
+    sel.innerHTML=data.map((s,i)=>{
+      const d=new Date(s.snapshot_date);
+      const lbl=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})+' · '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+      const tag=i===0?' (latest)':'';
+      return `<option value="${s.id}">${lbl}${tag} · ${s.sim_count} SIMs</option>`;
+    }).join('');
+    window._rtSnapshots=data;
+  }catch(e){console.warn('[realtime] snapshot list error:',e.message);}
+}
+
+// Load a specific snapshot by id
+async function rtLoadSnapshot(snapId){
+  if(!sb||!snapId)return;
+  try{
+    const {data,error}=await sb.from('realtime_snapshots').select('snapshot_date,data').eq('id',snapId).single();
+    if(error)throw error;
+    rtRows=data.data||[];
+    rtFilt=[];
+    document.getElementById('rt-snapshot-info').style.display='';
+    const d=new Date(data.snapshot_date);
+    document.getElementById('rt-snapshot-date').textContent=d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})+' at '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    renderRT();
+    showToast(`📅 Loaded snapshot from ${d.toLocaleDateString('en-IN')}`,'success');
+  }catch(e){showToast('❌ Could not load snapshot: '+e.message,'error');}
 }
 
 async function cloudDeleteMonth(label){
@@ -2308,6 +2407,7 @@ function flagFor(pct){if(pct>=100)return'EXCEEDED';if(pct>=90)return'CRITICAL';i
 async function cloudAutoLoad(){
   if(!sbInit())return;
   try{
+    // 1. Load monthly history
     const {data:months}=await sb.from('monthly_snapshots').select('month_label').order('month_label',{ascending:false}).limit(12);
     if(months&&months.length){
       console.log('[cloud] Auto-loading',months.length,'months from cloud');
@@ -2316,7 +2416,28 @@ async function cloudAutoLoad(){
     }else{
       console.log('[cloud] No saved months found, using built-in data');
     }
-  }catch(e){console.warn('[cloud] auto-load skipped:',e.message);}
+  }catch(e){console.warn('[cloud] monthly auto-load skipped:',e.message);}
+
+  // 2. Load latest real-time snapshot + populate date dropdown
+  try{
+    await rtLoadAvailableSnapshots();
+    if(window._rtSnapshots&&window._rtSnapshots.length){
+      const latest=window._rtSnapshots[0];
+      console.log('[cloud] Auto-loading latest realtime snapshot from',latest.snapshot_date);
+      await rtLoadSnapshot(latest.id);
+      document.getElementById('rt-snapshot-sel').value=latest.id;
+    }else{
+      // Fallback to legacy single-row table
+      const {data:legacy}=await sb.from('realtime_snapshot').select('data,uploaded_at').eq('id',1).maybeSingle();
+      if(legacy&&legacy.data){
+        rtRows=legacy.data;
+        document.getElementById('rt-snapshot-info').style.display='';
+        document.getElementById('rt-snapshot-date').textContent=new Date(legacy.uploaded_at).toLocaleString('en-IN');
+        renderRT();
+        console.log('[cloud] Loaded legacy realtime snapshot');
+      }
+    }
+  }catch(e){console.warn('[cloud] realtime auto-load skipped:',e.message);}
 }
 // Run auto-load after init
 setTimeout(cloudAutoLoad,1500);
