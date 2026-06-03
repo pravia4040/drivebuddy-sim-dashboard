@@ -458,7 +458,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
   <div id="cloud-status" style="margin:14px 0;padding:10px 14px;background:#1a1a1a;border-radius:8px;font-size:12px;color:var(--gr);font-family:'Roboto',monospace">Connecting to cloud…</div>
 
   <!-- Sync Now section -->
-  <div style="background:rgba(255,123,0,.06);border:1px solid rgba(255,123,0,.2);border-radius:10px;padding:14px;margin-bottom:14px">
+  <div class="editor-only" style="background:rgba(255,123,0,.06);border:1px solid rgba(255,123,0,.2);border-radius:10px;padding:14px;margin-bottom:14px">
     <div class="sec-ey" style="margin-bottom:8px">⬆ Push Current Data to Cloud</div>
     <div style="font-size:12px;color:var(--gr);margin-bottom:10px">Upload the months currently loaded in this dashboard so your team can access them.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -517,8 +517,9 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
   <div class="hdr-title">SIM Data Dashboard</div>
   <div class="hdr-right">
     <span class="data-badge db-builtin" id="data-badge">● Built-in Data</span>
-    <button class="or-btn" onclick="openCloudModal()" style="background:#1e3a8a;border-color:#1e3a8a" title="Cloud sync">☁️ Cloud</button>
-    <button class="or-btn" onclick="openModal()">📂 Upload Data</button>
+    <span id="viewer-badge" style="display:none;font-family:'Mulish',sans-serif;font-size:11px;padding:3px 9px;border-radius:4px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.25)">👁 View Only</span>
+    <button class="or-btn editor-only" onclick="openCloudModal()" style="background:#1e3a8a;border-color:#1e3a8a" title="Cloud sync">☁️ Cloud</button>
+    <button class="or-btn editor-only" onclick="openModal()">📂 Upload Data</button>
     <div class="hdr-date" id="hdr-date"></div>
   </div>
 </div>
@@ -662,7 +663,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
     <div style="font-size:32px;margin-bottom:12px;">📈</div>
     <div style="font-family:'Poppins',sans-serif;font-size:15px;font-weight:600;color:var(--sl);margin-bottom:6px;">No Trend Data Yet</div>
     <div style="font-family:'Poppins',sans-serif;font-size:12px;color:var(--gr);margin-bottom:16px;">Upload 2–6 months of usage files to see consumption trends per SIM.</div>
-    <button class="or-btn" style="margin:0 auto" onclick="openModal();setUploadMode('multi')">📊 Upload Multi-Month Data</button>
+    <button class="or-btn editor-only" style="margin:0 auto" onclick="openModal();setUploadMode('multi')">📊 Upload Multi-Month Data</button>
   </div>
   <div id="tr-grid" class="trend-grid" style="display:none"></div>
   <div class="pag" id="tr-pag"></div>
@@ -731,7 +732,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
     </select>
     <span class="res-count" id="rt-count">—</span>
     <button class="exp-btn" onclick="exportRT()">⬇ Export CSV</button>
-    <button class="or-btn" style="margin-left:auto" onclick="openModal();setUploadMode('realtime')">📡 Upload Real-time</button>
+    <button class="or-btn editor-only" style="margin-left:auto" onclick="openModal();setUploadMode('realtime')">📡 Upload Real-time</button>
   </div>
 
   <!-- Empty state -->
@@ -739,7 +740,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
     <div style="font-size:38px;margin-bottom:12px">⚡</div>
     <div style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;color:var(--wh);margin-bottom:6px">Real-time Data Not Loaded</div>
     <div style="font-family:'Poppins',sans-serif;font-size:12px;color:var(--gr);margin-bottom:20px;max-width:500px;margin-left:auto;margin-right:auto">Upload the BULK_DATA_USAGE Excel from your SIM portal to see live allocated vs used vs available data for every SIM.</div>
-    <button class="or-btn" style="margin:0 auto" onclick="openModal();setUploadMode('realtime')">📡 Upload Real-time Data</button>
+    <button class="or-btn editor-only" style="margin:0 auto" onclick="openModal();setUploadMode('realtime')">📡 Upload Real-time Data</button>
   </div>
 
   <!-- Ribbon shown when data loaded -->
@@ -2082,6 +2083,38 @@ const SB_URL='https://uzfihzcixoxzlrrajluw.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6ZmloemNpeG94emxycmFqbHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODc5NjcsImV4cCI6MjA5NjA2Mzk2N30.GX7PZI6A3OVWoUdLM7xoVlePiFlLaxChd8yMe0Zs4K4';
 let sb=null, cloudMonths=[], cloudSelected=new Set();
 
+// ── 👁 VIEWER MODE LOCK ──────────────────────────────────────────────────
+// Default: view-only. Add ?edit=pRavi@a1304 to URL to unlock editing.
+const EDIT_SECRET='pRavi@a1304';
+let EDIT_MODE=false;
+function checkEditMode(){
+  try{
+    const params=new URLSearchParams(window.location.search);
+    const sessionUnlock=sessionStorage.getItem('dbai_edit_unlock');
+    if(params.get('edit')===EDIT_SECRET||sessionUnlock===EDIT_SECRET){
+      EDIT_MODE=true;
+      sessionStorage.setItem('dbai_edit_unlock',EDIT_SECRET);
+      console.log('[viewer-mode] 🔓 EDIT MODE active');
+    }else{
+      EDIT_MODE=false;
+      console.log('[viewer-mode] 👁 VIEW-ONLY mode (default for team)');
+    }
+  }catch(e){EDIT_MODE=false;}
+}
+function applyViewerMode(){
+  checkEditMode();
+  // Hide/show all .editor-only elements
+  document.querySelectorAll('.editor-only').forEach(el=>{
+    el.style.display=EDIT_MODE?'':'none';
+  });
+  // Show the viewer badge if in view-only
+  const badge=document.getElementById('viewer-badge');
+  if(badge)badge.style.display=EDIT_MODE?'none':'';
+}
+// Re-apply when modal content re-renders (cloud list etc)
+const _origRenderCloudList=window.renderCloudList;
+window.addEventListener('DOMContentLoaded',()=>{setTimeout(applyViewerMode,100);});
+
 function sbInit(){
   try{
     if(typeof window.supabase==='undefined'){console.warn('[cloud] Supabase SDK not loaded yet');return false;}
@@ -2141,10 +2174,11 @@ function renderCloudList(){
         <div style="color:var(--wh);font-weight:600">${m.month_label}</div>
         <div style="color:var(--gr);font-size:10px">${m.sim_count} SIMs · ${m.vehicle_count} vehicles · saved ${fmtDate(m.uploaded_at)}</div>
       </div>
-      <button class="btn-g" style="font-size:10px;padding:4px 8px" onclick="event.preventDefault();cloudDeleteMonth('${m.month_label}')">🗑</button>
+      <button class="btn-g editor-only" style="font-size:10px;padding:4px 8px" onclick="event.preventDefault();cloudDeleteMonth('${m.month_label}')">🗑</button>
     </label>`;
   }).join('');
   document.getElementById('cloud-load-btn').disabled=cloudSelected.size===0;
+  applyViewerMode(); // Re-hide delete buttons if view-only
 }
 function cloudToggle(label,on){
   if(on)cloudSelected.add(label); else cloudSelected.delete(label);
@@ -2288,6 +2322,7 @@ async function cloudAutoLoad(){
 setTimeout(cloudAutoLoad,1500);
 
 init();
+applyViewerMode();
 </script>
 </body>
 </html>
