@@ -539,12 +539,12 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 
 <!-- STATS -->
 <div class="stats-row">
-  <div class="sc s0"><div class="sc-ey">Total Vehicles</div><div class="sc-val" id="st-total">—</div><div class="sc-hint">All registered</div></div>
-  <div class="sc s1"><div class="sc-ey">With SIM Plan</div><div class="sc-val" id="st-plan">—</div><div class="sc-hint">Active data plans</div></div>
+  <div class="sc s0" style="cursor:pointer;transition:background .15s" onmouseover="this.style.background='#1a1a1a'" onmouseout="this.style.background=''" onclick="cardFilter('','Showing all vehicles')" title="Click to show all vehicles (clears filters)"><div class="sc-ey">Total Vehicles</div><div class="sc-val" id="st-total">—</div><div class="sc-hint">All registered · click to view ↗</div></div>
+  <div class="sc s1" style="cursor:pointer;transition:background .15s" onmouseover="this.style.background='#1a1a1a'" onmouseout="this.style.background=''" onclick="cardFilter('__HASPLAN__','Showing vehicles with an active SIM plan')" title="Click to see vehicles that have an active SIM plan"><div class="sc-ey">With SIM Plan</div><div class="sc-val" id="st-plan">—</div><div class="sc-hint">Active data plans · click to view ↗</div></div>
   <div class="sc s5" style="border-left:3px solid #94a3b8;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#1a1a1a'" onmouseout="this.style.background=''" onclick="showNoUsage()" title="Click to see these vehicles so you can update their SIM numbers"><div class="sc-ey">⚪ Without Usage</div><div class="sc-val" id="st-no-usage" style="color:#94a3b8">—</div><div class="sc-hint" id="st-no-usage-hint">SIM exists, no portal data · click to view ↗</div></div>
-  <div class="sc s2"><div class="sc-ey">⚠ Warning ≥75%</div><div class="sc-val" id="st-warn">—</div><div class="sc-hint">Approaching limit</div></div>
-  <div class="sc s3"><div class="sc-ey">🔴 Critical ≥90%</div><div class="sc-val" id="st-crit">—</div><div class="sc-hint">Near exhaustion</div></div>
-  <div class="sc s4"><div class="sc-ey">💥 Exceeded 100%</div><div class="sc-val" id="st-exc">—</div><div class="sc-hint">Plan exhausted</div></div>
+  <div class="sc s2" style="cursor:pointer;transition:background .15s" onmouseover="this.style.background='#1a1a1a'" onmouseout="this.style.background=''" onclick="cardFilter('WARNING','Showing vehicles at 75–90% usage (Warning)')" title="Click to see vehicles approaching their limit (75–90%)"><div class="sc-ey">⚠ Warning ≥75%</div><div class="sc-val" id="st-warn">—</div><div class="sc-hint">Approaching limit · click to view ↗</div></div>
+  <div class="sc s3" style="cursor:pointer;transition:background .15s" onmouseover="this.style.background='#1a1a1a'" onmouseout="this.style.background=''" onclick="cardFilter('CRITICAL','Showing vehicles at 90–100% usage (Critical)')" title="Click to see vehicles near exhaustion (90–100%)"><div class="sc-ey">🔴 Critical ≥90%</div><div class="sc-val" id="st-crit">—</div><div class="sc-hint">Near exhaustion · click to view ↗</div></div>
+  <div class="sc s4" style="cursor:pointer;transition:background .15s" onmouseover="this.style.background='#1a1a1a'" onmouseout="this.style.background=''" onclick="cardFilter('EXCEEDED','Showing vehicles over 100% usage (Exceeded)')" title="Click to see vehicles that exceeded their plan (100%+)"><div class="sc-ey">💥 Exceeded 100%</div><div class="sc-val" id="st-exc">—</div><div class="sc-hint">Plan exhausted · click to view ↗</div></div>
 </div>
 
 <!-- GLOBAL FILTERS -->
@@ -585,6 +585,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
     <input class="srch" id="v-srch" placeholder="Search reg / client…" oninput="filterV()">
     <select class="fsel" id="v-flag" onchange="filterV()">
       <option value="">All Status</option>
+      <option value="__HASPLAN__">📶 With SIM Plan</option>
       <option value="EXCEEDED">💥 Exceeded</option><option value="CRITICAL">🔴 Critical</option>
       <option value="WARNING">⚠ Warning</option><option value="MODERATE">🔵 Moderate</option>
       <option value="OK">✅ OK</option><option value="NO DATA">— No Data</option>
@@ -741,6 +742,15 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
       <option value="">Loading…</option>
     </select>
     <input class="srch" id="rt-srch" placeholder="Search SIM / plan / reg…" oninput="filterRT()">
+    <select class="fsel" id="rt-flag" onchange="filterRT()">
+      <option value="">All Status</option>
+      <option value="EXCEEDED">💥 Exceeded 100%</option>
+      <option value="CRITICAL">🔴 Critical ≥90%</option>
+      <option value="WARNING">⚠ Warning ≥75%</option>
+      <option value="MODERATE">🔵 Moderate ≥50%</option>
+      <option value="OK">✅ OK</option>
+      <option value="WASTED">⚪ Wasted &lt;5%</option>
+    </select>
     <select class="fsel" id="rt-plan" onchange="filterRT()"><option value="">All Plans</option></select>
     <select class="fsel" id="rt-sort" onchange="filterRT()">
       <option value="used_pct">Sort: Usage % (High→Low)</option>
@@ -764,6 +774,9 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 
   <!-- Ribbon shown when data loaded -->
   <div class="dg-ribbon" id="rt-ribbon" style="display:none"></div>
+
+  <!-- Clickable status filter chips -->
+  <div id="rt-status-chips" style="display:none;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
 
   <!-- Plan-wise summary cards -->
   <div id="rt-plan-summary" style="display:none;margin-bottom:16px"></div>
@@ -803,6 +816,7 @@ let vRows=[], vFilt=[], vPage=1, vSK='usage_pct', vSD=-1;
 let dgRows=[], dgFilt=[], dgPage=1, dgSK='saving_pct', dgSD=-1;
 let trData=[], trFilt=[], trPage=1;
 let uploadMode='single';
+let LOCAL_UPLOAD_DONE=false; // set true once user loads data locally, so the cloud auto-load timer won't clobber it
 let parsedCSV={v:null,u:null,mv:null};
 let vColMap={}, uColMap={};
 let monthSlots=[];  // [{label, file, parsed, colMap}]
@@ -912,6 +926,7 @@ function filterV(){
     if(!gfMatch(v))return false;
     if(q&&!v.reg.toLowerCase().includes(q)&&!v.client.toLowerCase().includes(q)&&!(v.hw_id||'').toLowerCase().includes(q)&&!(v.sim_no||'').includes(q))return false;
     if(fl==='__NOUSAGE__'){ if(!isNoUsage(v))return false; }
+    else if(fl==='__HASPLAN__'){ if(!v.plan)return false; }
     else if(fl&&v.flag!==fl)return false;
     if(pl&&v.plan!==pl)return false;
     return true;
@@ -921,21 +936,24 @@ function filterV(){
   renderVT();renderPag('v-pag',vFilt.length,vPage,n=>{vPage=n;renderVT();renderPag('v-pag',vFilt.length,vPage,null);});
 }
 function sortV(k){if(vSK===k)vSD*=-1;else{vSK=k;vSD=-1;}filterV();}
-// ── WITHOUT-USAGE FILTER (SIM present, no portal usage data) ──────────────
+// ── CLICKABLE STAT CARDS ───────────────────────────────────────────────────
 function isNoUsage(v){
   const sim=(v.sim_no||'').trim();
   return sim!==''&&sim!=='nan'&&!v.plan;
 }
-function showNoUsage(){
+// Generic: jump to Vehicle Wise tab and apply a status filter.
+//  flag values: '' = all, '__HASPLAN__', '__NOUSAGE__', or a flag like WARNING/CRITICAL/EXCEEDED
+function cardFilter(flag,msg){
   showTab('vehicles');
-  document.getElementById('v-flag').value='__NOUSAGE__';
-  document.getElementById('v-srch').value='';
-  document.getElementById('v-plan').value='';
+  const fl=document.getElementById('v-flag'); if(fl)fl.value=flag;
+  const sr=document.getElementById('v-srch'); if(sr)sr.value='';
+  const pl=document.getElementById('v-plan'); if(pl)pl.value='';
   filterV();
   const panel=document.getElementById('panel-vehicles');
   if(panel)panel.scrollIntoView({behavior:'smooth',block:'start'});
-  if(typeof showToast==='function')showToast('Showing vehicles with a SIM but no portal usage data — update their SIM numbers here','info');
+  if(msg&&typeof showToast==='function')showToast(msg,'info');
 }
+function showNoUsage(){cardFilter('__NOUSAGE__','Showing vehicles with a SIM but no portal usage data — update their SIM numbers here');}
 function renderVT(){
   const rows=vFilt.slice((vPage-1)*PS,vPage*PS);
   const tb=document.getElementById('v-tbody');
@@ -1162,6 +1180,7 @@ function renderRT(){
   if(!rtRows.length){
     document.getElementById('rt-no-data').style.display='';
     document.getElementById('rt-ribbon').style.display='none';
+    document.getElementById('rt-status-chips').style.display='none';
     document.getElementById('rt-plan-summary').style.display='none';
     document.getElementById('rt-table-wrap').style.display='none';
     document.getElementById('rt-badge').textContent='0';
@@ -1169,6 +1188,7 @@ function renderRT(){
   }
   document.getElementById('rt-no-data').style.display='none';
   document.getElementById('rt-ribbon').style.display='';
+  document.getElementById('rt-status-chips').style.display='flex';
   document.getElementById('rt-plan-summary').style.display='';
   document.getElementById('rt-table-wrap').style.display='';
   document.getElementById('rt-badge').textContent=rtRows.length;
@@ -1186,12 +1206,14 @@ function filterRT(){
   if(!rtRows.length)return;
   const q=(document.getElementById('rt-srch').value||'').toLowerCase();
   const pl=document.getElementById('rt-plan').value;
+  const flEl=document.getElementById('rt-flag'); const fl=flEl?flEl.value:'';
   rtSK=document.getElementById('rt-sort').value||'used_pct';
   rtFilt=rtRows.filter(r=>{
     // Global filter — client and SIM status
     if(!gfMatch(r))return false;
     if(q&&!(r.reg||'').toLowerCase().includes(q)&&!(r.client||'').toLowerCase().includes(q)&&!(r.sim_no||'').includes(q)&&!(r.plan||'').toLowerCase().includes(q))return false;
     if(pl&&r.plan!==pl)return false;
+    if(fl&&r.flag!==fl)return false;
     return true;
   });
   const asc=['reg'];
@@ -1204,6 +1226,7 @@ function filterRT(){
   document.getElementById('rt-count').textContent=rtFilt.length.toLocaleString()+' SIMs';
   renderRTTable();
   renderRTRibbon();
+  renderRTStatusChips();
   renderRTPlanCards();
   renderPag('rt-pag',rtFilt.length,rtPage,n=>{rtPage=n;renderRTTable();renderPag('rt-pag',rtFilt.length,rtPage,null);});
 }
@@ -1229,6 +1252,38 @@ function renderRTRibbon(){
     <div class="dgr"><div class="dgr-lbl">Total Allocated</div><div class="dgr-val">${Math.round(totalAlloc/1024).toLocaleString()} GB</div><div class="dgr-sub">Current cycle</div></div>
     <div class="dgr"><div class="dgr-lbl">Total Used</div><div class="dgr-val" style="color:#4ade80">${Math.round(totalUsed/1024).toLocaleString()} GB</div><div class="dgr-sub">${overallPct}% of allocated</div></div>
     <div class="dgr" style="border-color:rgba(239,68,68,.3)"><div class="dgr-lbl">Available (Unused)</div><div class="dgr-val" style="color:#ef4444">${Math.round(totalAvail/1024).toLocaleString()} GB</div><div class="dgr-sub">${(100-overallPct).toFixed(1)}% remaining · ${wastedSims} SIMs &lt;5% used</div></div>`;
+}
+
+// Clickable status-count chips (always computed from the FULL snapshot, not the filtered subset)
+function renderRTStatusChips(){
+  const el=document.getElementById('rt-status-chips');
+  if(!el)return;
+  const cur=(document.getElementById('rt-flag')||{}).value||'';
+  const defs=[
+    {flag:'',     label:'All',          cls:''},
+    {flag:'EXCEEDED',label:'💥 Exceeded',cls:'wc-hi'},
+    {flag:'CRITICAL',label:'🔴 Critical',cls:'wc-hi'},
+    {flag:'WARNING', label:'⚠ Warning', cls:'wc-md'},
+    {flag:'MODERATE',label:'🔵 Moderate',cls:''},
+    {flag:'OK',      label:'✅ OK',      cls:'wc-lo'},
+    {flag:'WASTED',  label:'⚪ Wasted',  cls:''},
+  ];
+  // Count from rows that pass the GLOBAL (client/sim) filter, ignoring the status filter itself
+  const base=rtRows.filter(r=>gfMatch(r));
+  el.innerHTML=defs.map(d=>{
+    const n=d.flag===''?base.length:base.filter(r=>r.flag===d.flag).length;
+    const active=cur===d.flag;
+    const bg=active?'background:var(--or);color:var(--ink);border-color:var(--or)':'background:var(--dc);color:var(--sl);border-color:var(--b2)';
+    return `<div onclick="rtSetFlag('${d.flag}')" style="cursor:pointer;border:1px solid;border-radius:8px;padding:8px 14px;font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;transition:all .15s;${bg}" title="Click to filter">
+      <span>${d.label}</span>
+      <span style="font-weight:800;font-size:14px">${n.toLocaleString()}</span>
+    </div>`;
+  }).join('');
+}
+function rtSetFlag(flag){
+  const sel=document.getElementById('rt-flag');
+  if(sel){ sel.value=(sel.value===flag)?'':flag; }  // click active chip again = clear
+  filterRT();
 }
 
 function renderRTPlanCards(){
@@ -1991,6 +2046,7 @@ function buildStats(vehicles){
 }
 
 function processSingle(){
+  LOCAL_UPLOAD_DONE=true;
   setProgress(20,'Merging data…');
   let vehRows=parsedCSV.v?buildVehRows(parsedCSV.v,vColMap):BUILTIN.vehicles.map(v=>({reg:v.reg,client:v.client,hw_id:v.hw_id,device_id:v.device_id,status:v.status,sim:v.sim_no}));
   let usageMap={};
@@ -2015,6 +2071,7 @@ function processSingle(){
 }
 
 function processMulti(){
+  LOCAL_UPLOAD_DONE=true;
   setProgress(15,'Building vehicle list…');
   const mvCsv=parsedCSV.mv;
   const vehCm={};VEH_COLS.forEach(c=>{vehCm[c.k]=autoMatch(mvCsv?mvCsv.headers:[],c.h);});
@@ -2384,71 +2441,131 @@ async function cloudDeleteMonth(label){
   }catch(e){showToast('❌ '+e.message,'error');}
 }
 
-async function cloudLoadSelected(){await cloudLoadMonths([...cloudSelected]);}
-async function cloudLoadAll(){await cloudLoadMonths(cloudMonths.map(m=>m.month_label));}
+async function cloudLoadSelected(){const m=await cloudFetchLatestMaster();await cloudLoadMonths([...cloudSelected],m);}
+async function cloudLoadAll(){const m=await cloudFetchLatestMaster();await cloudLoadMonths(cloudMonths.map(m=>m.month_label),m);}
 
-async function cloudLoadMonths(labels){
+async function cloudLoadMonths(labels, baseFleet){
   if(!labels.length){showToast('Select at least one month first','error');return;}
   const status=document.getElementById('cloud-status');
-  status.textContent=`⏳ Loading ${labels.length} month(s)…`;
-  status.style.color='var(--gr)';
+  if(status){status.textContent=`⏳ Loading ${labels.length} month(s)…`;status.style.color='var(--gr)';}
   try{
     const {data,error}=await sb.from('monthly_snapshots').select('month_label,data').in('month_label',labels);
     if(error)throw error;
 
-    // Build vehicle-keyed structure (reg → {months:[]})
-    const vehMap={};
-    data.forEach(snap=>{
-      snap.data.forEach(v=>{
-        const key=v.reg||v.sim_no;
-        if(!vehMap[key]){
-          vehMap[key]={reg:v.reg,client:v.client,hw_id:v.hw_id,sim_no:v.sim_no,plan:v.plan,plan_gb:v.plan_gb,used_mb:v.used_mb,used_gb:v.used_gb,plan_mb:v.plan_gb*1024,usage_pct:v.usage_pct,sim_status:v.sim_status,status:'active',flag:flagFor(v.usage_pct),months:[]};
-        }
-        vehMap[key].months.push({label:snap.month_label,used_mb:v.used_mb,used_gb:v.used_gb,usage_pct:v.usage_pct,plan_gb:v.plan_gb,plan:v.plan});
-      });
-    });
-
-    // Sort months chronologically per vehicle
     const MONTH_NAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const key=l=>{const m=String(l).match(/(\w{3})\s+(\d{4})/);return m?parseInt(m[2])*12+MONTH_NAMES.indexOf(m[1]):0;};
-    const vehicles=Object.values(vehMap);
-    vehicles.forEach(v=>{
-      v.months.sort((a,b)=>key(a.label)-key(b.label));
-      // Use latest month's values as the headline
-      const last=v.months[v.months.length-1];
-      if(last){v.used_mb=last.used_mb;v.used_gb=last.used_gb;v.usage_pct=last.usage_pct;v.plan_gb=last.plan_gb;v.plan=last.plan||v.plan;v.plan_mb=last.plan_gb*1024;v.flag=flagFor(last.usage_pct);}
-    });
 
-    trData=vehicles.filter(v=>v.months.length>0);
+    // Collect the trend months for each vehicle (keyed by reg, falling back to sim)
+    const monthsByVeh={};
+    data.forEach(snap=>{
+      (snap.data||[]).forEach(v=>{
+        const k=v.reg||v.sim_no;
+        if(!k)return;
+        if(!monthsByVeh[k])monthsByVeh[k]=[];
+        monthsByVeh[k].push({label:snap.month_label,used_mb:v.used_mb,used_gb:v.used_gb,usage_pct:v.usage_pct,plan_gb:v.plan_gb,plan:v.plan});
+      });
+    });
+    Object.values(monthsByVeh).forEach(arr=>arr.sort((a,b)=>key(a.label)-key(b.label)));
+
+    let vehicles;
+    if(baseFleet&&baseFleet.length){
+      // AUTHORITATIVE FLEET = vehicle master. Keep its rows & usage as-is,
+      // and just attach the trend months for the Trends tab. The fleet count
+      // and current numbers always come from the latest uploaded master —
+      // old monthly snapshots can no longer shrink/override the fleet.
+      vehicles=baseFleet.map(v=>{
+        const k=v.reg||v.sim_no;
+        const months=(monthsByVeh[k]||[]).slice();
+        return Object.assign({},v,{months});
+      });
+    }else{
+      // LEGACY: no master available — rebuild the fleet from the snapshots
+      // and use the latest month as the headline (old behaviour).
+      const vehMap={};
+      data.forEach(snap=>{
+        (snap.data||[]).forEach(v=>{
+          const k=v.reg||v.sim_no;
+          if(!k)return;
+          if(!vehMap[k]){
+            vehMap[k]={reg:v.reg,client:v.client,hw_id:v.hw_id,sim_no:v.sim_no,plan:v.plan,plan_gb:v.plan_gb,used_mb:v.used_mb,used_gb:v.used_gb,plan_mb:v.plan_gb*1024,usage_pct:v.usage_pct,sim_status:v.sim_status,status:'active',flag:flagFor(v.usage_pct),months:[]};
+          }
+          vehMap[k].months.push({label:snap.month_label,used_mb:v.used_mb,used_gb:v.used_gb,usage_pct:v.usage_pct,plan_gb:v.plan_gb,plan:v.plan});
+        });
+      });
+      vehicles=Object.values(vehMap);
+      vehicles.forEach(v=>{
+        v.months.sort((a,b)=>key(a.label)-key(b.label));
+        const last=v.months[v.months.length-1];
+        if(last){v.used_mb=last.used_mb;v.used_gb=last.used_gb;v.usage_pct=last.usage_pct;v.plan_gb=last.plan_gb;v.plan=last.plan||v.plan;v.plan_mb=last.plan_gb*1024;v.flag=flagFor(last.usage_pct);}
+      });
+    }
+
+    trData=vehicles.filter(v=>v.months&&v.months.length>0);
     const clients=[...new Set(vehicles.map(v=>v.client).filter(c=>c&&c!=='nan'))].sort();
     loadData({vehicles,plan_summary:[],stats:buildStats(vehicles),clients},true);
     closeCloudModal();
-    showToast(`✅ Loaded ${labels.length} month(s) from cloud · ${trData.length} vehicles`,'success');
+    showToast(`✅ Loaded ${vehicles.length} vehicles · ${labels.length} month(s) of trend data`,'success');
   }catch(e){
     console.error('[cloud] load failed',e);
     showToast('❌ Load failed: '+e.message,'error');
-    status.textContent='❌ '+e.message;status.style.color='#ef4444';
+    if(status){status.textContent='❌ '+e.message;status.style.color='#ef4444';}
   }
+}
+
+// Load the newest vehicle master from cloud → returns the vehicles array (or null)
+async function cloudFetchLatestMaster(){
+  try{
+    const {data,error}=await sb.from('vehicle_master').select('data,uploaded_at,vehicle_count').order('uploaded_at',{ascending:false}).limit(1);
+    if(error)throw error;
+    if(data&&data[0]&&Array.isArray(data[0].data)&&data[0].data.length){
+      console.log('[cloud] Latest vehicle master:',data[0].data.length,'vehicles (saved',data[0].uploaded_at+')');
+      return data[0].data;
+    }
+  }catch(e){console.warn('[cloud] master fetch skipped:',e.message);}
+  return null;
+}
+
+// Load just the master fleet (no trend months) onto the dashboard
+function applyMasterFleet(masterVehicles){
+  masterVehicles.forEach(v=>{if(!v.months)v.months=[];});
+  trData=[];
+  const clients=[...new Set(masterVehicles.map(v=>v.client).filter(c=>c&&c!=='nan'))].sort();
+  loadData({vehicles:masterVehicles,plan_summary:[],stats:buildStats(masterVehicles),clients},true);
 }
 
 function flagFor(pct){if(pct>=100)return'EXCEEDED';if(pct>=90)return'CRITICAL';if(pct>=75)return'WARNING';if(pct>=50)return'MODERATE';if(pct>0)return'OK';return'NO DATA';}
 
-// Auto-load on startup: try to fetch latest cloud snapshot
+// Auto-load on startup: vehicle master is authoritative, trends merge on top
 async function cloudAutoLoad(){
   if(!sbInit())return;
   try{
-    // 1. Load monthly history
-    const {data:months}=await sb.from('monthly_snapshots').select('month_label').order('month_label',{ascending:false}).limit(12);
-    if(months&&months.length){
-      console.log('[cloud] Auto-loading',months.length,'months from cloud');
-      await cloudLoadMonths(months.map(m=>m.month_label));
-      showToast(`☁️ Auto-loaded ${months.length} months from cloud`,'success');
-    }else{
-      console.log('[cloud] No saved months found, using built-in data');
-    }
-  }catch(e){console.warn('[cloud] monthly auto-load skipped:',e.message);}
+    // 1. Newest vehicle master = the authoritative fleet (source of truth)
+    const masterVehicles=await cloudFetchLatestMaster();
 
-  // 2. Load latest real-time snapshot + populate date dropdown
+    // If the user already loaded data locally while we were fetching,
+    // don't clobber it with cloud data.
+    if(LOCAL_UPLOAD_DONE){console.log('[cloud] Local upload detected — skipping cloud auto-load');return;}
+
+    // 2. Monthly history → merged on top of the master fleet
+    const {data:months}=await sb.from('monthly_snapshots').select('month_label').order('month_label',{ascending:false}).limit(12);
+    if(LOCAL_UPLOAD_DONE){console.log('[cloud] Local upload detected — skipping cloud auto-load');return;}
+
+    if(months&&months.length){
+      console.log('[cloud] Auto-loading',months.length,'months'+(masterVehicles?' onto vehicle master ('+masterVehicles.length+' vehicles)':' (no master found — rebuilding fleet from snapshots)'));
+      await cloudLoadMonths(months.map(m=>m.month_label), masterVehicles);
+      if(masterVehicles)showToast(`☁️ Loaded ${masterVehicles.length} vehicles + ${months.length} months from cloud`,'success');
+      else showToast(`☁️ Auto-loaded ${months.length} months from cloud`,'success');
+    }else if(masterVehicles){
+      // No monthly trend data yet — just load the master fleet
+      console.log('[cloud] No months saved — loading vehicle master only');
+      applyMasterFleet(masterVehicles);
+      showToast(`☁️ Loaded ${masterVehicles.length} vehicles from cloud`,'success');
+    }else{
+      console.log('[cloud] No cloud data found, using built-in data');
+    }
+  }catch(e){console.warn('[cloud] auto-load skipped:',e.message);}
+
+  // 3. Load latest real-time snapshot + populate date dropdown
   try{
     await rtLoadAvailableSnapshots();
     if(window._rtSnapshots&&window._rtSnapshots.length){
