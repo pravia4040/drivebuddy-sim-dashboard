@@ -2612,7 +2612,8 @@ setTimeout(cloudAutoLoad,1500);
 
   window.__AUTH_ROW__ = auth.row;
   const isAdmin = auth.row.role==='Admin';
-  if(!isAdmin){ try{ sessionStorage.removeItem('dbai_edit_unlock'); }catch(e){} }
+  if(isAdmin){ try{ sessionStorage.setItem('dbai_edit_unlock',EDIT_SECRET); }catch(e){} }
+  else{ try{ sessionStorage.removeItem('dbai_edit_unlock'); }catch(e){} }
 
   veil.remove();
   init();
