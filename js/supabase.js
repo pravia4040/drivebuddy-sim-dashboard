@@ -3,24 +3,28 @@
    ------------------------------------------------------------
    Loaded by every page (login, dashboard, admin, unauthorized).
    Requires the Supabase SDK <script> to be loaded BEFORE this.
+
+   NOTE: We attach everything to window.* only. We do NOT declare
+   top-level `const SB_URL` here, because index.html already
+   declares its own SB_URL/SB_KEY for the existing cloud code,
+   and two top-level `const`s with the same name on one page
+   would crash with "Identifier 'SB_URL' has already been declared".
    ============================================================ */
+(function () {
+  var URL = 'https://uzfihzcixoxzlrrajluw.supabase.co';
+  var ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6ZmloemNpeG94emxycmFqbHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODc5NjcsImV4cCI6MjA5NjA2Mzk2N30.GX7PZI6A3OVWoUdLM7xoVlePiFlLaxChd8yMe0Zs4K4';
 
-// 🔑 Same project you already use for SIM data.
-const SB_URL = 'https://uzfihzcixoxzlrrajluw.supabase.co';
-const SB_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6ZmloemNpeG94emxycmFqbHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODc5NjcsImV4cCI6MjA5NjA2Mzk2N30.GX7PZI6A3OVWoUdLM7xoVlePiFlLaxChd8yMe0Zs4K4';
+  // Persist + auto-refresh the session so a page refresh keeps the user logged in.
+  window.sb = window.supabase.createClient(URL, ANON, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: 'dbai_auth'
+    }
+  });
 
-// Persist + auto-refresh the session so a page refresh keeps the user logged in.
-const supabaseClient = window.supabase.createClient(SB_URL, SB_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,   // needed for magic-link / recovery redirects
-    storageKey: 'dbai_auth'
-  }
-});
-
-// Make it globally reachable. The dashboard's existing cloud code can reuse
-// THIS client instead of creating its own (see integration notes).
-window.sb = supabaseClient;
-window.SB_URL = SB_URL;
-window.SB_ANON_KEY = SB_ANON_KEY;
+  // Expose on window for any page that needs them (no top-level const → no clash)
+  window.SB_URL = URL;
+  window.SB_ANON_KEY = ANON;
+})();
