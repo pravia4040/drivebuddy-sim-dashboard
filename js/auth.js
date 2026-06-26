@@ -20,7 +20,9 @@ const AUTH = {
 
   /* ---- email + password ---- */
   async signInWithPassword(email, password) {
-    return window.sb.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    const result = await window.sb.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    if (!result.error) localStorage.setItem('dbai_session_start', Date.now());
+    return result;
   },
 
   /* ---- magic link (passwordless) ---- */
@@ -67,5 +69,17 @@ const AUTH = {
     return { ok: true, row: data, user };
   }
 };
+
+// Stamp login time when a magic-link / OAuth session lands
+window.sb.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_IN') {
+    if (!localStorage.getItem('dbai_session_start')) {
+      localStorage.setItem('dbai_session_start', Date.now());
+    }
+  }
+  if (event === 'SIGNED_OUT') {
+    localStorage.removeItem('dbai_session_start');
+  }
+});
 
 window.AUTH = AUTH;

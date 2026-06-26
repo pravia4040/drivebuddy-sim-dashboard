@@ -60,6 +60,16 @@ const $ = id => document.getElementById(id);
 const msg = (t, ok) => { const m=$('msg'); m.textContent=t; m.className='msg show '+(ok?'ok':'err'); };
 const hideMsg = () => $('msg').className='msg';
 
+// Show session-expired banner if redirected after timeout
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('expired') === '1') {
+    msg('Your session has expired. Please sign in again.');
+    // Clean URL without reloading
+    history.replaceState(null, '', window.location.pathname);
+  }
+})();
+
 // If already signed in & authorized, skip straight to dashboard.
 (async () => {
   const s = await AUTH.getSession();
