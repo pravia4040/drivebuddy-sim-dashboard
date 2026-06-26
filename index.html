@@ -327,6 +327,8 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
 </head>
 <body>
 
@@ -2243,7 +2245,7 @@ window.addEventListener('DOMContentLoaded',()=>{setTimeout(applyViewerMode,100);
 function sbInit(){
   try{
     if(typeof window.supabase==='undefined'){console.warn('[cloud] Supabase SDK not loaded yet');return false;}
-    sb=window.supabase.createClient(SB_URL,SB_KEY);
+    sb = window.sb || window.supabase.createClient(SB_URL,SB_KEY);
     console.log('[cloud] Supabase client ready');
     return true;
   }catch(e){console.error('[cloud] init failed',e);return false;}
@@ -2589,8 +2591,47 @@ async function cloudAutoLoad(){
 // Run auto-load after init
 setTimeout(cloudAutoLoad,1500);
 
-init();
-applyViewerMode();
+(async function bootWithAuth(){
+  const veil=document.createElement('div');
+  veil.id='__authveil';
+  veil.style.cssText='position:fixed;inset:0;z-index:99999;background:#0E0E0E;display:flex;align-items:center;justify-content:center;color:#757575;font-family:Poppins,sans-serif;font-size:13px;';
+  veil.textContent='Verifying access\u2026';
+  document.body.appendChild(veil);
+
+  if(!window.sb && window.supabase){ window.sb=window.supabase.createClient(SB_URL,SB_KEY); }
+
+  const session = await window.AUTH.getSession();
+  if(!session){ location.replace('login.html'); return; }
+
+  const auth = await window.AUTH.getAuthorization();
+  if(!auth.ok){
+    if(auth.reason==='disabled') location.replace('unauthorized.html?r=disabled');
+    else location.replace('unauthorized.html');
+    return;
+  }
+
+  window.__AUTH_ROW__ = auth.row;
+  const isAdmin = auth.row.role==='Admin';
+  if(!isAdmin){ try{ sessionStorage.removeItem('dbai_edit_unlock'); }catch(e){} }
+
+  veil.remove();
+  init();
+  applyViewerMode();
+
+  try{
+    const right=document.querySelector('.hdr-right');
+    if(right){
+      if(isAdmin){
+        const a=document.createElement('a');
+        a.href='admin.html'; a.textContent='\u2699 Admin'; a.className='or-btn';
+        a.style.textDecoration='none'; right.prepend(a);
+      }
+      const out=document.createElement('button');
+      out.className='btn-g'; out.textContent='Logout';
+      out.onclick=()=>window.AUTH.signOut(); right.appendChild(out);
+    }
+  }catch(e){}
+})();
 </script>
 </body>
 </html>
