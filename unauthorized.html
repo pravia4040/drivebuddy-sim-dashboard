@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Access denied — drivebuddyAI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Mulish:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="js/auth-ui.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="card center">
+    <div class="brand" style="justify-content:center;">
+      <div>
+        <div class="name"><span class="dr">drive</span><span class="bd">buddy</span><span class="ai">ai</span></div>
+      </div>
+    </div>
+    <div class="big-icon" id="ic">🔒</div>
+    <h1 id="title">Access not authorized</h1>
+    <p class="lead" id="body">
+      Your account is not authorized to access this dashboard.<br>Please contact the administrator.
+    </p>
+    <button class="btn btn-ghost" id="back">Back to sign in</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
+<script>
+const r = new URLSearchParams(location.search).get('r');
+if (r === 'disabled') {
+  document.getElementById('ic').textContent='⛔';
+  document.getElementById('title').textContent='Account disabled';
+  document.getElementById('body').innerHTML='Your access has been disabled by an administrator.<br>Please contact the administrator.';
+} else if (r === 'role') {
+  document.getElementById('ic').textContent='🛡️';
+  document.getElementById('title').textContent='Admins only';
+  document.getElementById('body').innerHTML='This area is restricted to administrators.';
+} else if (r === 'expired') {
+  document.getElementById('ic').textContent='⏳';
+  document.getElementById('title').textContent='Session expired';
+  document.getElementById('body').innerHTML='For your security, you have been signed out.<br>Please sign in again to continue.';
+}
+document.getElementById('back').onclick = async () => { await sb.auth.signOut(); location.href='login.html'; };
+</script>
+</body>
+</html>
