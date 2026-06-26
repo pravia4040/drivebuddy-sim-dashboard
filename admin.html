@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — User Management · drivebuddyAI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Mulish:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="js/auth-ui.css">
+<style>
+.shell{max-width:1040px;margin:0 auto;padding:22px 24px;}
+.topbar{display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--b1);padding-bottom:16px;margin-bottom:22px;}
+.topbar .name{font-size:17px;font-weight:800;letter-spacing:-.5px;}
+.topbar .name .dr{color:var(--or);}.topbar .name .bd{color:#fff;}.topbar .name .ai{color:var(--or);}
+.topbar .right{margin-left:auto;display:flex;align-items:center;gap:12px;}
+.who{font-family:'Mulish',sans-serif;font-size:12px;color:var(--gr);}
+.lnk{font-size:12px;color:var(--sl);text-decoration:none;border:1px solid var(--b2);padding:7px 13px;border-radius:8px;}
+.lnk:hover{border-color:var(--or);color:var(--or);}
+.panel{background:var(--dc);border:1px solid var(--b2);border-radius:14px;padding:20px;margin-bottom:20px;}
+.panel h2{font-size:14px;font-weight:600;margin-bottom:14px;}
+.addgrid{display:grid;grid-template-columns:1fr 150px 120px;gap:10px;align-items:end;}
+.addgrid label{margin:0 0 6px;}
+.addgrid input,.addgrid select{width:100%;background:#1a1a1a;border:1px solid var(--b2);color:#fff;
+  font-family:'Poppins',sans-serif;font-size:13px;padding:10px 12px;border-radius:9px;outline:none;}
+.addgrid input:focus,.addgrid select:focus{border-color:var(--or);}
+.addgrid .btn{margin:0;padding:10px;}
+.add-msg{margin-top:12px;font-size:12.5px;display:none;}
+.add-msg.ok{display:block;color:#86efac;}.add-msg.err{display:block;color:#fca5a5;}
+.searchbar{margin-bottom:14px;}
+.searchbar input{width:100%;max-width:320px;background:#1a1a1a;border:1px solid var(--b2);color:#fff;
+  font-family:'Poppins',sans-serif;font-size:13px;padding:9px 12px;border-radius:9px;outline:none;}
+.searchbar input:focus{border-color:var(--or);}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;color:var(--gr);
+  letter-spacing:1px;text-transform:uppercase;padding:0 10px 10px;border-bottom:1px solid var(--b1);}
+td{padding:13px 10px;border-bottom:1px solid var(--b1);vertical-align:middle;}
+.em{font-weight:500;}.sub{font-size:11px;color:var(--gr);font-family:'Mulish',sans-serif;margin-top:2px;}
+.muted{color:var(--gr);}.err{color:#fca5a5;}
+.pill{font-family:'Mulish',sans-serif;font-size:11px;font-weight:700;padding:3px 9px;border-radius:5px;}
+.pill.ok{background:rgba(34,197,94,.12);color:#4ade80;}
+.pill.off{background:rgba(239,68,68,.12);color:#f87171;}
+.pill.adm{background:rgba(255,123,0,.14);color:var(--or);}
+.pill.vw{background:rgba(117,117,117,.18);color:var(--sl);}
+.acts{display:flex;gap:6px;flex-wrap:wrap;}
+.mini{background:#1a1a1a;border:1px solid var(--b2);color:var(--sl);font-family:'Poppins',sans-serif;
+  font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;}
+.mini:hover{border-color:var(--or);color:var(--or);}
+.mini.ok:hover{border-color:var(--ok);color:#4ade80;}
+.mini.del:hover{border-color:var(--crit);color:#f87171;}
+@media(max-width:680px){.addgrid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <div class="name"><span class="dr">drive</span><span class="bd">buddy</span><span class="ai">ai</span></div>
+    <span class="pill adm">Admin</span>
+    <div class="right">
+      <span class="who" id="admin-who"></span>
+      <a class="lnk" href="index.html">← Dashboard</a>
+      <button class="lnk" id="logout-btn" style="background:none;cursor:pointer;">Logout</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Add authorized user</h2>
+    <div class="addgrid">
+      <div><label for="add-email">Email</label><input type="email" id="add-email" placeholder="john@company.com"></div>
+      <div><label for="add-role">Role</label>
+        <select id="add-role"><option value="Viewer">Viewer</option><option value="Admin">Admin</option></select></div>
+      <div><button class="btn" id="add-btn">Save</button></div>
+    </div>
+    <div class="add-msg" id="add-msg"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Authorized users</h2>
+    <div class="searchbar"><input type="text" id="search" placeholder="Search by email…"></div>
+    <table>
+      <thead><tr><th>User / Added by</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody id="user-rows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/guards.js"></script>
+<script src="js/users.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

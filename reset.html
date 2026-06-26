@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Set a new password — drivebuddyAI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Mulish:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="js/auth-ui.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="brand">
+      <div>
+        <div class="name"><span class="dr">drive</span><span class="bd">buddy</span><span class="ai">ai</span></div>
+      </div>
+    </div>
+    <div class="eyebrow">Account</div>
+    <h1>Set a new password</h1>
+    <p class="lead">Choose a strong password of at least 8 characters.</p>
+    <label for="p1">New password</label>
+    <input type="password" id="p1" autocomplete="new-password" placeholder="••••••••">
+    <label for="p2">Confirm password</label>
+    <input type="password" id="p2" autocomplete="new-password" placeholder="••••••••">
+    <button class="btn" id="save">Update password</button>
+    <div class="msg" id="msg"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const msg=(t,ok)=>{const m=$('msg');m.textContent=t;m.className='msg show '+(ok?'ok':'err');};
+$('save').onclick = async () => {
+  const a=$('p1').value, b=$('p2').value;
+  if(a.length<8){ msg('Password must be at least 8 characters.'); return; }
+  if(a!==b){ msg('Passwords do not match.'); return; }
+  $('save').disabled=true;
+  const { error } = await AUTH.updatePassword(a);
+  $('save').disabled=false;
+  if(error){ msg(error.message); return; }
+  msg('✓ Password updated. Redirecting…', true);
+  setTimeout(()=>location.replace('index.html'), 1200);
+};
+</script>
+</body>
+</html>

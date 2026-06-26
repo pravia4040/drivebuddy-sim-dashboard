@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in — drivebuddyAI SIM Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Mulish:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="js/auth-ui.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="brand">
+      <div>
+        <div class="name"><span class="dr">drive</span><span class="bd">buddy</span><span class="ai">ai</span></div>
+      </div>
+    </div>
+
+    <div class="eyebrow">SIM Data Dashboard</div>
+    <h1>Sign in</h1>
+    <p class="lead">Access is restricted to authorized team members.</p>
+
+    <div class="tabs">
+      <button class="tab active" id="tab-pw">Password</button>
+      <button class="tab" id="tab-ml">Magic Link</button>
+    </div>
+
+    <!-- PASSWORD MODE -->
+    <div id="mode-pw">
+      <label for="email-pw">Email</label>
+      <input type="email" id="email-pw" autocomplete="username" placeholder="you@company.com">
+      <label for="pw">Password</label>
+      <input type="password" id="pw" autocomplete="current-password" placeholder="••••••••">
+      <div class="remember"><input type="checkbox" id="remember" checked><label for="remember" style="margin:0;">Keep me signed in</label></div>
+      <button class="btn" id="btn-pw">Sign in</button>
+      <div class="row-links">
+        <a id="link-forgot">Forgot password?</a>
+        <a id="link-ml2">Use magic link instead</a>
+      </div>
+    </div>
+
+    <!-- MAGIC LINK MODE -->
+    <div id="mode-ml" style="display:none;">
+      <label for="email-ml">Email</label>
+      <input type="email" id="email-ml" autocomplete="username" placeholder="you@company.com">
+      <button class="btn" id="btn-ml">Send magic link</button>
+      <div class="row-links"><a id="link-pw2">Use password instead</a></div>
+    </div>
+
+    <div class="msg" id="msg"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const msg = (t, ok) => { const m=$('msg'); m.textContent=t; m.className='msg show '+(ok?'ok':'err'); };
+const hideMsg = () => $('msg').className='msg';
+
+// If already signed in & authorized, skip straight to dashboard.
+(async () => {
+  const s = await AUTH.getSession();
+  if (s) {
+    const a = await AUTH.getAuthorization();
+    if (a.ok) location.replace('index.html');
+    else if (a.reason === 'disabled') location.replace('unauthorized.html?r=disabled');
+    else location.replace('unauthorized.html');
+  }
+})();
+
+// Tab switching
+function setMode(pw){
+  $('tab-pw').classList.toggle('active', pw);
+  $('tab-ml').classList.toggle('active', !pw);
+  $('mode-pw').style.display = pw ? '' : 'none';
+  $('mode-ml').style.display = pw ? 'none' : '';
+  hideMsg();
+}
+$('tab-pw').onclick = ()=>setMode(true);
+$('tab-ml').onclick = ()=>setMode(false);
+$('link-ml2').onclick = ()=>setMode(false);
+$('link-pw2').onclick = ()=>setMode(true);
+
+// Password sign-in
+$('btn-pw').onclick = async () => {
+  hideMsg();
+  const email=$('email-pw').value, pw=$('pw').value;
+  if(!email||!pw){ msg('Enter your email and password.'); return; }
+  $('btn-pw').disabled=true;
+  const { error } = await AUTH.signInWithPassword(email, pw);
+  $('btn-pw').disabled=false;
+  if(error){ msg(error.message); return; }
+  // verify authorization before entering
+  const a = await AUTH.getAuthorization();
+  if(a.ok) location.replace('index.html');
+  else { await sb.auth.signOut(); location.replace(a.reason==='disabled'?'unauthorized.html?r=disabled':'unauthorized.html'); }
+};
+$('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') $('btn-pw').click(); });
+
+// Magic link
+$('btn-ml').onclick = async () => {
+  hideMsg();
+  const email=$('email-ml').value;
+  if(!email){ msg('Enter your email.'); return; }
+  $('btn-ml').disabled=true;
+  const { error } = await AUTH.signInWithMagicLink(email);
+  $('btn-ml').disabled=false;
+  if(error) msg(error.message);
+  else msg('✓ Check your inbox for a sign-in link. You can close this tab.', true);
+};
+
+// Forgot password
+$('link-forgot').onclick = async () => {
+  hideMsg();
+  const email=$('email-pw').value;
+  if(!email){ msg('Enter your email above first, then click "Forgot password?".'); return; }
+  const { error } = await AUTH.sendPasswordReset(email);
+  if(error) msg(error.message);
+  else msg('✓ If that email is registered, a reset link is on its way.', true);
+};
+</script>
+</body>
+</html>
