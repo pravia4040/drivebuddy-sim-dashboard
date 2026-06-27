@@ -31,8 +31,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/supabase.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/pw-toggle.js"></script>
 <script>
 const $=id=>document.getElementById(id);
+document.addEventListener('DOMContentLoaded', () => { attachPwToggle('p1'); attachPwToggle('p2'); });
 const msg=(t,ok)=>{const m=$('msg');m.textContent=t;m.className='msg show '+(ok?'ok':'err');};
 $('save').onclick = async () => {
   const a=$('p1').value, b=$('p2').value;

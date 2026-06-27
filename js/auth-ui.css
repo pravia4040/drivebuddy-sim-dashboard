@@ -37,3 +37,16 @@ input:focus{border-color:var(--or);}
 .remember input{width:auto;}
 .center{text-align:center;}
 .big-icon{font-size:40px;margin-bottom:14px;}
+
+/* ── password visibility toggle ───────────────────────── */
+.pw-wrap{position:relative;display:block;}
+.pw-wrap input[type=password],
+.pw-wrap input[type=text]{width:100%;}
+.pw-eye{
+  position:absolute;top:50%;right:12px;transform:translateY(-50%);
+  background:none;border:none;padding:4px;cursor:pointer;
+  color:var(--gr);line-height:0;border-radius:4px;
+  transition:color .15s;
+}
+.pw-eye:hover{color:var(--or);}
+.pw-eye:focus-visible{outline:2px solid var(--or);outline-offset:2px;}
