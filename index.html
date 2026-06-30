@@ -143,6 +143,11 @@ body{background:var(--dbg);color:var(--wh);font-family:'Poppins',sans-serif;font
 .res-count{font-family:'Mulish',sans-serif;font-size:11px;color:var(--gr);margin-left:auto;}
 .exp-btn{background:transparent;border:1px solid var(--b2);color:var(--gr);padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'Poppins',sans-serif;font-size:11px;font-weight:500;transition:all .15s;}
 .exp-btn:hover{border-color:var(--or);color:var(--or);}
+.exp-grp{display:inline-flex;gap:0;}
+.exp-grp .exp-btn:first-child{border-radius:6px 0 0 6px;border-right:none;color:var(--wh);border-color:rgba(255,123,0,.5);}
+.exp-grp .exp-btn:first-child:hover{border-color:var(--or);background:rgba(255,123,0,.08);}
+.exp-grp .exp-btn:last-child{border-radius:0 6px 6px 0;font-size:10px;padding:5px 9px;}
+.exp-grp .exp-btn:last-child:hover{border-color:var(--or);color:var(--or);}
 .tw{background:var(--dc);border:1px solid var(--b2);border-radius:11px;overflow:hidden;}
 table{width:100%;border-collapse:collapse;}
 thead th{background:#111;padding:9px 14px;text-align:left;font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gr);border-bottom:1px solid var(--b2);cursor:pointer;user-select:none;white-space:nowrap;}
@@ -331,6 +336,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 <script src="js/auth.js"></script>
 <script src="js/guards.js"></script>
 <script src="js/session-timeout.js"></script>
+<script src="js/export-utils.js"></script>
 </head>
 <body>
 
@@ -597,7 +603,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
     </select>
     <select class="fsel" id="v-plan" onchange="filterV()"><option value="">All Plans</option></select>
     <span class="res-count" id="v-count">—</span>
-    <button class="exp-btn" onclick="exportV()">⬇ Export</button>
+    <div class="exp-grp"><button class="exp-btn" onclick="exportV()">⬇ Excel</button><button class="exp-btn" onclick="exportV('csv')">CSV</button></div>
   </div>
   <div class="tw">
     <table>
@@ -644,7 +650,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
       <option value="50">≥ 50%</option><option value="75">≥ 75%</option><option value="90">≥ 90%</option>
     </select>
     <span class="res-count" id="dg-count">—</span>
-    <button class="exp-btn" onclick="exportDG()">⬇ Export</button>
+    <div class="exp-grp"><button class="exp-btn" onclick="exportDG()">⬇ Excel</button><button class="exp-btn" onclick="exportDG('csv')">CSV</button></div>
   </div>
   <div class="dg-ribbon" id="dg-ribbon"></div>
   <div class="tw">
@@ -674,7 +680,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
     <input class="srch" id="tr-srch" placeholder="Search reg / client…" oninput="filterTR()">
     <select class="fsel" id="tr-plan" onchange="filterTR()"><option value="">All Plans</option></select>
     <span class="res-count" id="tr-count">—</span>
-    <button class="exp-btn" onclick="exportTR()">⬇ Export</button>
+    <div class="exp-grp"><button class="exp-btn" onclick="exportTR()">⬇ Excel</button><button class="exp-btn" onclick="exportTR('csv')">CSV</button></div>
   </div>
   <div id="tr-no-data" style="background:var(--dc);border:1px solid var(--b2);border-radius:11px;padding:48px;text-align:center;">
     <div style="font-size:32px;margin-bottom:12px;">📈</div>
@@ -700,7 +706,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
       <option value="reg">Sort: Reg. No.</option>
     </select>
     <span class="res-count" id="pr-count">—</span>
-    <button class="exp-btn" onclick="exportPrice()">⬇ Export CSV</button>
+    <div class="exp-grp"><button class="exp-btn" onclick="exportPrice()">⬇ Excel</button><button class="exp-btn" onclick="exportPrice('csv')">CSV</button></div>
   </div>
 
   <!-- Summary ribbon -->
@@ -764,7 +770,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
       <option value="reg">Sort: Reg. No.</option>
     </select>
     <span class="res-count" id="rt-count">—</span>
-    <button class="exp-btn" onclick="exportRT()">⬇ Export CSV</button>
+    <div class="exp-grp"><button class="exp-btn" onclick="exportRT()">⬇ Excel</button><button class="exp-btn" onclick="exportRT('csv')">CSV</button></div>
     <button class="or-btn editor-only" style="margin-left:auto" onclick="openModal();setUploadMode('realtime')">📡 Upload Real-time</button>
   </div>
 
@@ -1066,10 +1072,11 @@ function renderPriceTable(){
     </tr>`;
   }).join('');
 }
-function exportPrice(){
-  const h='Reg No,Client,HW ID,Plan,Used (GB),Usage %,Monthly Cost (INR),Rate per GB Plan,Effective Rate per GB,Wastage Cost (INR),Wastage %,SIM Status\n';
-  const rows=prFilt.map(r=>[r.reg,r.client,r.hw_id||'',r.plan,r.used_gb,r.usage_pct,r.monthly_cost,r.cost_per_gb_plan,r.cost_per_gb_used||'',r.wastage_cost,Math.round(r.wastage_cost/r.monthly_cost*100),r.sim_status].join(',')).join('\n');
-  dl(h+rows,'drivebuddyai_price_analysis.csv');
+function exportPrice(fmt){
+  const headers=['Reg No','Client','HW ID','Plan','Used (GB)','Usage %','Monthly Cost (INR)','Rate per GB Plan','Effective Rate per GB','Wastage Cost (INR)','Wastage %','SIM Status'];
+  const rows=prFilt.map(r=>[r.reg,r.client,r.hw_id||'',r.plan,r.used_gb,r.usage_pct,r.monthly_cost,r.cost_per_gb_plan,r.cost_per_gb_used||'',r.wastage_cost,Math.round(r.wastage_cost/r.monthly_cost*100),r.sim_status]);
+  if(fmt==='csv') ExportUtils.csv('drivebuddyai_price_analysis.csv',headers,rows,[]);
+  else            ExportUtils.xlsx('drivebuddyai_price_analysis.xlsx',headers,rows,[]);
 }
 // ── REAL-TIME PORTAL DATA ─────────────────────────────────────────────────
 let rtRows=[],rtFilt=[],rtPage=1,rtSK='used_pct';
@@ -1351,16 +1358,20 @@ function renderRTTable(){
   }).join('');
 }
 
-function exportRT(){
-  const h='Reg No,Client,SIM No,Plan,Allocated (GB),Used (GB),Available (GB),Usage %,Status\n';
-  const rows=rtFilt.map(r=>[r.reg,r.client,r.sim_no,r.plan,r.alloc_gb,r.used_gb,r.avail_gb,r.used_pct,r.flag].map(x=>typeof x==='string'&&x.includes(',')?'"'+x+'"':x).join(',')).join('\n');
-  dl(h+rows,'drivebuddyai_realtime.csv');
+function exportRT(fmt){
+  const headers=['Reg No','Client','SIM No','Plan','Allocated (GB)','Used (GB)','Available (GB)','Usage %','Status'];
+  const rows=rtFilt.map(r=>[r.reg,r.client,String(r.sim_no||''),r.plan,r.alloc_gb,r.used_gb,r.avail_gb,r.used_pct,r.flag]);
+  const SIM=[2];
+  if(fmt==='csv') ExportUtils.csv('drivebuddyai_realtime.csv',headers,rows,SIM);
+  else            ExportUtils.xlsx('drivebuddyai_realtime.xlsx',headers,rows,SIM);
 }
 
-function exportV(){
-  const h='Reg No,Client,HW ID,SIM No,Plan,Usage %,Used (GB),Plan (GB),SIM Status,Flag\n';
-  const rows=vFilt.map(v=>[v.reg,v.client,v.hw_id||'',v.sim_no||'',v.plan,v.usage_pct,v.used_gb,v.plan_gb,v.sim_status,v.flag].map(x=>typeof x==='string'&&x.includes(',')?'"'+x+'"':x).join(',')).join('\n');
-  dl(h+rows,'drivebuddyai_vehicles.csv');
+function exportV(fmt){
+  const headers=['Reg No','Client','HW ID','SIM No','Plan','Usage %','Used (GB)','Plan (GB)','SIM Status','Flag'];
+  const rows=vFilt.map(v=>[v.reg,v.client,v.hw_id||'',String(v.sim_no||''),v.plan,v.usage_pct,v.used_gb,v.plan_gb,v.sim_status,v.flag]);
+  const SIM=[3];
+  if(fmt==='csv') ExportUtils.csv('drivebuddyai_vehicles.csv',headers,rows,SIM);
+  else            ExportUtils.xlsx('drivebuddyai_vehicles.xlsx',headers,rows,SIM);
 }
 
 // ── EXCEEDED ───────────────────────────────────────────────────────────────
@@ -1514,10 +1525,12 @@ function renderDGT(){
     <td style="font-family:'Poppins',sans-serif;font-size:11px;color:var(--gr)">${r.needed_gb}GB</td>
   </tr>`).join('');
 }
-function exportDG(){
-  const h='Reg No,Client,HW ID,SIM No,Current Plan (GB),Used (GB),Usage %,Suggested (GB),Saving %,Min Needed (GB)\n';
-  const rows=dgFilt.map(r=>[r.reg,r.client,r.hw_id||'',r.sim_no||'',r.plan_gb,r.used_gb,r.usage_pct,r.suggested_gb,r.saving_pct,r.needed_gb].join(',')).join('\n');
-  dl(h+rows,'drivebuddyai_downgrade_candidates.csv');
+function exportDG(fmt){
+  const headers=['Reg No','Client','HW ID','SIM No','Current Plan (GB)','Used (GB)','Usage %','Suggested (GB)','Saving %','Min Needed (GB)'];
+  const rows=dgFilt.map(r=>[r.reg,r.client,r.hw_id||'',String(r.sim_no||''),r.plan_gb,r.used_gb,r.usage_pct,r.suggested_gb,r.saving_pct,r.needed_gb]);
+  const SIM=[3];
+  if(fmt==='csv') ExportUtils.csv('drivebuddyai_downgrade_candidates.csv',headers,rows,SIM);
+  else            ExportUtils.xlsx('drivebuddyai_downgrade_candidates.xlsx',headers,rows,SIM);
 }
 
 // ── TRENDS ─────────────────────────────────────────────────────────────────
@@ -1729,12 +1742,13 @@ function closeVSum(){document.getElementById('vsum-modal').classList.remove('ope
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('vsum-modal').addEventListener('click',function(e){if(e.target===this)closeVSum();});
 });
-function exportTR(){
+function exportTR(fmt){
   if(!trData.length)return;
   const months=trData[0]?.months?.map(m=>m.label)||[];
-  const h='Reg No,Client,HW ID,Plan,SIM Status,'+months.map(m=>m+' Used MB').join(',')+'\n';
-  const rows=trFilt.map(v=>[v.reg,v.client,v.hw_id||'',v.plan,v.sim_status,...(v.months||[]).map(m=>m.used_mb)].join(',')).join('\n');
-  dl(h+rows,'drivebuddyai_trends.csv');
+  const headers=['Reg No','Client','HW ID','Plan','SIM Status',...months.map(m=>m+' Used MB')];
+  const rows=trFilt.map(v=>[v.reg,v.client,v.hw_id||'',v.plan,v.sim_status,...(v.months||[]).map(m=>m.used_mb)]);
+  if(fmt==='csv') ExportUtils.csv('drivebuddyai_trends.csv',headers,rows,[]);
+  else            ExportUtils.xlsx('drivebuddyai_trends.xlsx',headers,rows,[]);
 }
 
 // ── PAGINATION ─────────────────────────────────────────────────────────────
