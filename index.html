@@ -2188,13 +2188,28 @@ function processMulti(){
   const sampleSims=Object.keys(simMonthData).slice(0,3);
   sampleSims.forEach(s=>console.log('[processMulti] Sample SIM '+s+':',simMonthData[s]));
 
-  // Attach months to vehicles, sorted chronologically
+  // Build a SIM→month map from currently loaded trData so we can preserve
+  // months that were NOT part of this upload (incremental merge).
+  const existingMonthsBySim={};
+  trData.forEach(v=>{
+    if(!v.sim_no||!v.months)return;
+    const mMap={};
+    v.months.forEach(m=>{mMap[m.label]=m;});
+    existingMonthsBySim[v.sim_no]=mMap;
+  });
+
+  // Attach months to vehicles:
+  //  1. Start from existing months for this SIM (preserves history).
+  //  2. Overlay new months (upserts: same label → updated value, new label → added).
+  //  3. Sort chronologically.
   let matchedCount=0;
   vehicles.forEach(v=>{
-    const months=simMonthData[v.sim_no]||[];
-    months.sort((a,b)=>monthSortKey(a.label)-monthSortKey(b.label));
-    v.months=months;
-    if(months.length>0)matchedCount++;
+    const existing=existingMonthsBySim[v.sim_no]||{};
+    (simMonthData[v.sim_no]||[]).forEach(m=>{existing[m.label]=m;});
+    const merged=Object.values(existing);
+    merged.sort((a,b)=>monthSortKey(a.label)-monthSortKey(b.label));
+    v.months=merged;
+    if(merged.length>0)matchedCount++;
   });
   console.log('[processMulti] Vehicles matched with month data:',matchedCount,'of',vehicles.length);
 
