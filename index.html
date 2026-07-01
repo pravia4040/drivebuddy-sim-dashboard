@@ -1745,10 +1745,11 @@ document.addEventListener('DOMContentLoaded',()=>{
 function exportTR(fmt){
   if(!trData.length)return;
   const months=trData[0]?.months?.map(m=>m.label)||[];
-  const headers=['Reg No','Client','HW ID','Plan','SIM Status',...months.map(m=>m+' Used (GB)')];
-  const rows=trFilt.map(v=>[v.reg,v.client,v.hw_id||'',v.plan,v.sim_status,...(v.months||[]).map(m=>+(m.used_mb/1024).toFixed(2))]);
-  if(fmt==='csv') ExportUtils.csv('drivebuddyai_trends.csv',headers,rows,[]);
-  else            ExportUtils.xlsx('drivebuddyai_trends.xlsx',headers,rows,[]);
+  const headers=['Reg No','Client','HW ID','SIM Number (ICCID)','Plan','SIM Status',...months.map(m=>m+' Used (GB)')];
+  const rows=trFilt.map(v=>[v.reg,v.client,v.hw_id||'',String(v.sim_no||''),v.plan,v.sim_status,...(v.months||[]).map(m=>+(m.used_mb/1024).toFixed(2))]);
+  const SIM=[3];
+  if(fmt==='csv') ExportUtils.csv('drivebuddyai_trends.csv',headers,rows,SIM);
+  else            ExportUtils.xlsx('drivebuddyai_trends.xlsx',headers,rows,SIM);
 }
 
 // ── PAGINATION ─────────────────────────────────────────────────────────────
