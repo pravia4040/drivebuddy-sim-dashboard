@@ -661,11 +661,12 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
         <th onclick="sortDG('hw_id')">HW ID ↕</th>
         <th onclick="sortDG('sim_no')">SIM No. ↕</th>
         <th onclick="sortDG('plan_gb')">Current Plan ↕</th>
-        <th onclick="sortDG('used_gb')">Used GB ↕</th>
+        <th onclick="sortDG('avg_gb')">Avg (GB) ↕</th>
+        <th onclick="sortDG('used_gb')">Latest GB ↕</th>
         <th onclick="sortDG('usage_pct')">Usage % ↕</th>
         <th onclick="sortDG('suggested_gb')">Suggested ↕</th>
         <th onclick="sortDG('saving_pct')">Saving ↕</th>
-        <th onclick="sortDG('needed_gb')">Min Needed ↕</th>
+        <th onclick="sortDG('rec_confidence')">Confidence ↕</th>
       </tr></thead>
       <tbody id="dg-tbody"></tbody>
     </table>
@@ -1468,7 +1469,7 @@ function renderPlans(){
 
 // ── DOWNGRADE ──────────────────────────────────────────────────────────────
 function computeDG(){
-  dgRows=CD.vehicles.filter(v=>v.suggested_gb&&v.sim_status==='Active');
+  dgRows=CD.vehicles.filter(v=>v.suggested_gb&&v.sim_status==='Active'&&v.rec_type!=='upgrade');
   document.getElementById('dg-badge').textContent=dgRows.length;
   const fp=[...new Set(dgRows.map(r=>r.plan_gb))].sort((a,b)=>a-b);
   const tp=[...new Set(dgRows.map(r=>r.suggested_gb))].sort((a,b)=>a-b);
@@ -1511,23 +1512,32 @@ function sortDG(k){if(dgSK===k)dgSD*=-1;else{dgSK=k;dgSD=-1;}filterDG();}
 function renderDGT(){
   const rows=dgFilt.slice((dgPage-1)*PS,dgPage*PS);
   const tb=document.getElementById('dg-tbody');
-  if(!rows.length){tb.innerHTML='<tr class="empty-row"><td colspan="10">No candidates match</td></tr>';return;}
-  tb.innerHTML=rows.map(r=>`<tr>
+  if(!rows.length){tb.innerHTML='<tr class="empty-row"><td colspan="11">No candidates match</td></tr>';return;}
+  tb.innerHTML=rows.map(r=>{
+    const confColor=r.rec_confidence==='High'?'#4ade80':r.rec_confidence==='Medium'?'var(--or)':r.rec_confidence==='Low'?'#60a5fa':'var(--gr)';
+    const confLabel=r.rec_confidence||'—';
+    const mAnalyzed=r.months_analyzed?`${r.months_analyzed}mo`:'';
+    const tooltip=r.rec_reason?r.rec_reason.replace(/"/g,"'"):'';
+    return `<tr>
     <td><span class="rc reg-link" onclick="openVSum('${r.reg}')">${r.reg}</span></td>
     <td><span class="cc">${r.client}</span></td>
     <td><span class="hw-cell">${r.hw_id||'—'}</span></td>
     <td style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr)">${r.sim_no||'—'}</td>
     <td><span class="pc pc-cur">${r.plan_gb}GB</span></td>
+    <td style="font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;color:var(--or)">${r.avg_gb!=null?r.avg_gb+' GB':'—'}</td>
     <td><div class="pw-wrap"><div class="pb-bg" style="width:70px"><div class="pb" style="width:${Math.min(r.usage_pct,100)}%;background:${barColor(r.usage_pct)}"></div></div><span style="font-size:11px;font-weight:600;color:${barColor(r.usage_pct)};min-width:36px">${r.usage_pct.toFixed(1)}%</span></div></td>
     <td style="font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;color:var(--sl)">${r.used_gb}GB</td>
     <td><span class="arrow">→</span> <span class="pc pc-sug">${r.suggested_gb}GB</span></td>
     <td><span class="sc-chip ${scCls(r.saving_pct)}">↓ ${r.saving_pct}%</span></td>
-    <td style="font-family:'Poppins',sans-serif;font-size:11px;color:var(--gr)">${r.needed_gb}GB</td>
-  </tr>`).join('');
+    <td title="${tooltip}" style="cursor:${tooltip?'help':'default'}">
+      <span style="font-size:11px;font-weight:600;color:${confColor}">${confLabel}</span>
+      ${mAnalyzed?`<span style="font-size:10px;color:var(--gr);margin-left:4px">${mAnalyzed}</span>`:''}
+    </td>
+  </tr>`;}).join('');
 }
 function exportDG(fmt){
-  const headers=['Reg No','Client','HW ID','SIM No','Current Plan (GB)','Used (GB)','Usage %','Suggested (GB)','Saving %','Min Needed (GB)'];
-  const rows=dgFilt.map(r=>[r.reg,r.client,r.hw_id||'',String(r.sim_no||''),r.plan_gb,r.used_gb,r.usage_pct,r.suggested_gb,r.saving_pct,r.needed_gb]);
+  const headers=['Reg No','Client','HW ID','SIM No','Current Plan (GB)','Avg Usage (GB)','Latest Used (GB)','Usage %','Suggested (GB)','Saving %','Confidence','Months Analyzed','Trend','Reason'];
+  const rows=dgFilt.map(r=>[r.reg,r.client,r.hw_id||'',String(r.sim_no||''),r.plan_gb,r.avg_gb!=null?r.avg_gb:'',r.used_gb,r.usage_pct,r.suggested_gb,r.saving_pct,r.rec_confidence||'',r.months_analyzed||'',r.trend||'',r.rec_reason||'']);
   const SIM=[3];
   if(fmt==='csv') ExportUtils.csv('drivebuddyai_downgrade_candidates.csv',headers,rows,SIM);
   else            ExportUtils.xlsx('drivebuddyai_downgrade_candidates.xlsx',headers,rows,SIM);
@@ -1665,10 +1675,54 @@ function openVSum(reg){
     trendSection=`<div class="vsum-no-trend">📈 No multi-month trend data yet — upload monthly usage files to see history</div>`;
   }
 
-  // Build downgrade suggestion
-  let downgradeHtml='—';
-  if(v.suggested_gb&&v.saving_pct){
-    downgradeHtml=`<span style="color:#4ade80;font-weight:700">${v.suggested_gb}GB plan</span> saves ~${v.saving_pct}%`;
+  // Build smart recommendation block
+  let recHtml='—';
+  if(v.rec_type==='downgrade'&&v.suggested_gb){
+    const confColor=v.rec_confidence==='High'?'#4ade80':v.rec_confidence==='Medium'?'var(--or)':'#60a5fa';
+    recHtml=`<span style="color:#4ade80;font-weight:700">${v.suggested_gb} GB plan</span> saves ~${v.saving_pct}%
+      <span style="margin-left:6px;font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(34,197,94,.12);color:${confColor};border:1px solid ${confColor}30">${v.rec_confidence||''} confidence</span>`;
+  }else if(v.rec_type==='upgrade'&&v.upgrade_gb){
+    recHtml=`<span style="color:#ef4444;font-weight:700">Upgrade to ${v.upgrade_gb} GB</span>
+      <span style="margin-left:6px;font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3)">${v.rec_confidence||''} confidence</span>`;
+  }else if(v.rec_type==='keep'){
+    recHtml=`<span style="color:#4ade80">✓ Keep current plan</span>`;
+  }else if(v.rec_type==='insufficient'){
+    recHtml=`<span style="color:var(--gr);font-size:11px">⏳ ${v.months_analyzed||0}/3 months — need more history</span>`;
+  }else if(v.suggested_gb){
+    // fallback: single-month rec
+    recHtml=`<span style="color:#4ade80;font-weight:700">${v.suggested_gb}GB plan</span> saves ~${v.saving_pct}% <span style="font-size:10px;color:var(--gr)">(single-month)</span>`;
+  }
+
+  // Smart analysis section (only when trend data available)
+  let smartSection='';
+  if(v.rec_type&&v.rec_type!=='insufficient'&&v.avg_gb!=null){
+    const trendIcon=v.trend==='Increasing'?'📈':v.trend==='Decreasing'?'📉':'➡️';
+    const confColor=v.rec_confidence==='High'?'#4ade80':v.rec_confidence==='Medium'?'var(--or)':'#60a5fa';
+    smartSection=`
+    <div class="vsum-section" style="margin-top:16px">
+      <div class="vsum-section-title">🧠 Smart Plan Analysis (${v.months_analyzed} months)</div>
+      <div style="background:var(--dc);border:1px solid var(--b2);border-radius:9px;padding:14px 16px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+          <div style="text-align:center"><div style="font-size:10px;color:var(--gr);font-family:'Mulish',sans-serif;margin-bottom:3px">AVG USAGE</div><div style="font-weight:700;color:var(--wh)">${v.avg_gb} GB</div></div>
+          <div style="text-align:center"><div style="font-size:10px;color:var(--gr);font-family:'Mulish',sans-serif;margin-bottom:3px">MAX USAGE</div><div style="font-weight:700;color:#ef4444">${v.max_gb} GB</div></div>
+          <div style="text-align:center"><div style="font-size:10px;color:var(--gr);font-family:'Mulish',sans-serif;margin-bottom:3px">MIN USAGE</div><div style="font-weight:700;color:#4ade80">${v.min_gb} GB</div></div>
+          <div style="text-align:center"><div style="font-size:10px;color:var(--gr);font-family:'Mulish',sans-serif;margin-bottom:3px">TREND</div><div style="font-weight:700;color:var(--or)">${trendIcon} ${v.trend}</div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--gr)">Confidence</span>
+          <span style="font-size:11px;font-weight:600;color:${confColor}">${v.rec_confidence}</span>
+        </div>
+        <div style="font-size:11px;color:var(--sl);line-height:1.6;padding:8px 10px;background:#111;border-radius:6px;border:1px solid var(--b2)">${v.rec_reason||''}</div>
+      </div>
+    </div>`;
+  }else if(v.months&&v.months.length>0&&v.months.length<3){
+    smartSection=`
+    <div class="vsum-section" style="margin-top:16px">
+      <div class="vsum-section-title">🧠 Smart Plan Analysis</div>
+      <div style="background:var(--dc);border:1px solid var(--b2);border-radius:9px;padding:14px 16px;font-size:12px;color:var(--gr)">
+        ⏳ ${v.months.length}/3 months uploaded. Upload at least 3 months of data to generate a reliable plan recommendation.
+      </div>
+    </div>`;
   }
 
   document.getElementById('vsum-content').innerHTML=`
@@ -1730,10 +1784,11 @@ function openVSum(reg){
         <div class="vsum-detail-row"><span class="vsum-detail-label">Hardware ID</span><span class="vsum-detail-val" style="font-family:'Roboto',monospace;font-size:11px">${v.hw_id||'—'}</span></div>
         <div class="vsum-detail-row"><span class="vsum-detail-label">Vehicle Status</span><span class="vsum-detail-val">${v.status||'—'}</span></div>
         <div class="vsum-detail-row"><span class="vsum-detail-label">Client</span><span class="vsum-detail-val">${v.client||'—'}</span></div>
-        <div class="vsum-detail-row"><span class="vsum-detail-label">Downgrade Rec.</span><span class="vsum-detail-val">${downgradeHtml}</span></div>
+        <div class="vsum-detail-row"><span class="vsum-detail-label">Plan Rec.</span><span class="vsum-detail-val">${recHtml}</span></div>
       </div>
     </div>
 
+    ${smartSection}
     ${trendSection}`;
 
   document.getElementById('vsum-modal').classList.add('open');
@@ -2037,6 +2092,87 @@ function buildUsageMap(csv, cm){
   return map;
 }
 
+/* ── Smart Plan Recommendation Engine ──────────────────────────
+   Analyses v.months history (3+ required) and returns a rec object.
+   Uses outlier-trimmed average + linear trend so one bad month
+   never triggers a wrong recommendation.
+   ─────────────────────────────────────────────────────────────── */
+function smartRecommend(v){
+  const months=v.months||[];
+  const plan_gb=v.plan_gb||0;
+  const plan_mb=plan_gb*1024;
+  const sim_status=v.sim_status||'';
+
+  if(months.length<3){
+    return{rec_type:'insufficient',suggested_gb:null,saving_pct:null,upgrade_gb:null,
+      rec_confidence:null,rec_reason:'Insufficient historical data — need at least 3 months.',
+      months_analyzed:months.length,avg_gb:null,max_gb:null,min_gb:null,trend:null};
+  }
+
+  const usages=months.map(m=>m.used_mb);
+  const n=usages.length;
+  const rawMean=usages.reduce((a,b)=>a+b,0)/n;
+
+  // Outlier removal via 1.5×stddev (only when n≥4; keep at least 3 values)
+  const stddev=Math.sqrt(usages.reduce((s,u)=>s+(u-rawMean)**2,0)/n);
+  let filtered=usages;
+  if(n>=4&&stddev>0){
+    const cand=usages.filter(u=>Math.abs(u-rawMean)<=1.5*stddev);
+    if(cand.length>=3)filtered=cand;
+  }
+  const mean=filtered.reduce((a,b)=>a+b,0)/filtered.length;
+
+  const maxMb=Math.max(...usages);
+  const minMb=Math.min(...usages);
+  const avgGb=+(mean/1024).toFixed(2);
+  const maxGb=+(maxMb/1024).toFixed(2);
+  const minGb=+(minMb/1024).toFixed(2);
+  const avgPct=plan_mb>0?Math.round(mean/plan_mb*100):0;
+
+  // Linear trend slope (MB per month)
+  const xMean=(n-1)/2;
+  const slope=usages.reduce((num,u,i)=>num+(i-xMean)*(u-rawMean),0)/
+              (usages.reduce((den,_,i)=>den+(i-xMean)**2,0)||1);
+  const trend=slope>rawMean*0.05?'Increasing':slope<-rawMean*0.05?'Decreasing':'Stable';
+
+  // Confidence — coefficient of variation of the filtered set
+  const fStd=Math.sqrt(filtered.reduce((s,u)=>s+(u-mean)**2,0)/filtered.length);
+  const cv=mean>0?fStd/mean:1;
+  const rec_confidence=cv<0.2?'High':cv<0.4?'Medium':'Low';
+
+  // Needed capacity = filtered avg + 20% headroom
+  const neededMb=mean*1.2;
+  const neededGb=+(neededMb/1024).toFixed(2);
+
+  let rec_type,suggested_gb=null,saving_pct=null,upgrade_gb=null,rec_reason;
+
+  if(sim_status!=='Active'||plan_gb<=0){
+    rec_type='keep';
+    rec_reason=`SIM is not active or has no plan assigned.`;
+  }else if(mean>plan_mb*0.95){
+    rec_type='upgrade';
+    upgrade_gb=TIERS.find(t=>t>plan_gb)||null;
+    rec_reason=`Average usage ${avgGb} GB (${avgPct}% of ${plan_gb} GB plan) over ${n} months consistently exceeds capacity. Upgrade recommended.`;
+  }else if(neededGb<plan_gb*0.65){
+    const sug=TIERS.find(t=>t>=neededGb&&t<plan_gb)||null;
+    if(sug){
+      rec_type='downgrade';
+      suggested_gb=sug;
+      saving_pct=Math.round((1-sug/plan_gb)*100);
+      rec_reason=`Average usage ${avgGb} GB (${avgPct}% of ${plan_gb} GB plan) over ${n} months. Plan is oversized — downgrade saves ~${saving_pct}%.`;
+    }else{
+      rec_type='keep';
+      rec_reason=`Average usage ${avgGb} GB. No smaller plan tier available.`;
+    }
+  }else{
+    rec_type='keep';
+    rec_reason=`Average usage ${avgGb} GB (${avgPct}% of plan) over ${n} months. Current plan is appropriate.`;
+  }
+
+  return{rec_type,suggested_gb,saving_pct,upgrade_gb,needed_gb:neededGb,
+    rec_confidence,rec_reason,months_analyzed:n,avg_gb:avgGb,max_gb:maxGb,min_gb:minGb,trend};
+}
+
 function mergeToVehicles(vehRows, usageMap){
   return vehRows.map(v=>{
     const u=usageMap[v.sim]||{};
@@ -2212,6 +2348,25 @@ function processMulti(){
     if(merged.length>0)matchedCount++;
   });
   console.log('[processMulti] Vehicles matched with month data:',matchedCount,'of',vehicles.length);
+
+  // Apply smart recommendation engine to every vehicle that has month history
+  vehicles.forEach(v=>{
+    if(v.months&&v.months.length>=3){
+      const sr=smartRecommend(v);
+      v.rec_type=sr.rec_type;
+      v.suggested_gb=sr.suggested_gb;
+      v.saving_pct=sr.saving_pct;
+      v.needed_gb=sr.needed_gb;
+      v.upgrade_gb=sr.upgrade_gb;
+      v.rec_confidence=sr.rec_confidence;
+      v.rec_reason=sr.rec_reason;
+      v.months_analyzed=sr.months_analyzed;
+      v.avg_gb=sr.avg_gb;
+      v.max_gb=sr.max_gb;
+      v.min_gb=sr.min_gb;
+      v.trend=sr.trend;
+    }
+  });
 
   const newTrData=vehicles.filter(v=>v.months&&v.months.length>0);
   const clients=[...new Set(vehicles.map(v=>v.client).filter(c=>c&&c!=='nan'))].sort();
