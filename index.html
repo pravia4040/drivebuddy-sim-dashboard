@@ -2381,6 +2381,9 @@ function processMulti(){
       showToast(`⚠️ 0 vehicles matched. Vehicle file has ${vehWithSim} SIMs, months have ${Object.keys(simMonthData).length} SIMs, but none overlap. Check console (F12) for details.`,'error');
     }else{
       showToast(`✅ ${trData.length} SIMs with ${readyMonths.length}-month trend data`,'success');
+      // Auto-persist newly uploaded months to Supabase so data survives refresh/logout
+      const uploadedLabels=readyMonths.map(m=>m.label);
+      cloudSilentPush(uploadedLabels).catch(e=>console.warn('[cloud] auto-save failed:',e));
     }
   },300);
 }
@@ -2497,6 +2500,35 @@ function renderCloudList(){
 function cloudToggle(label,on){
   if(on)cloudSelected.add(label); else cloudSelected.delete(label);
   document.getElementById('cloud-load-btn').disabled=cloudSelected.size===0;
+}
+
+// Silent background push — called automatically after processMulti.
+// Pushes only the specified month labels; no button state changes.
+async function cloudSilentPush(labels){
+  if(!labels||!labels.length)return;
+  if(!sb&&!sbInit()){console.warn('[cloud] silent push skipped — Supabase not ready');return;}
+  const labelsSet=new Set(labels);
+  const byMonth={};
+  trData.forEach(v=>{
+    (v.months||[]).forEach(m=>{
+      if(!labelsSet.has(m.label))return;
+      if(!byMonth[m.label])byMonth[m.label]={month_label:m.label,vehicles:[]};
+      byMonth[m.label].vehicles.push({reg:v.reg,client:v.client,hw_id:v.hw_id,sim_no:v.sim_no,
+        used_mb:m.used_mb,used_gb:m.used_gb,plan:m.plan||v.plan,plan_gb:m.plan_gb,
+        usage_pct:m.usage_pct,sim_status:v.sim_status});
+    });
+  });
+  let saved=0;
+  for(const m of Object.values(byMonth)){
+    const rec={month_label:m.month_label,vehicle_count:m.vehicles.length,
+      sim_count:m.vehicles.filter(v=>v.sim_no).length,
+      data:m.vehicles,uploaded_at:new Date().toISOString()};
+    const {error}=await sb.from('monthly_snapshots').upsert(rec,{onConflict:'month_label'});
+    if(error){console.error('[cloud] silent push error for',m.month_label,error);throw error;}
+    saved++;
+  }
+  console.log('[cloud] Auto-saved',saved,'month(s) to Supabase:',labels.join(', '));
+  showToast(`☁️ Auto-saved ${saved} month(s) to cloud`,'success');
 }
 
 async function cloudPushAllMonths(){
@@ -2688,6 +2720,14 @@ async function cloudLoadMonths(labels, baseFleet){
         if(last){v.used_mb=last.used_mb;v.used_gb=last.used_gb;v.usage_pct=last.usage_pct;v.plan_gb=last.plan_gb;v.plan=last.plan||v.plan;v.plan_mb=last.plan_gb*1024;v.flag=flagFor(last.usage_pct);}
       });
     }
+
+    // Apply smart recommendation engine so recs survive refresh/reload
+    vehicles.forEach(v=>{
+      if(v.months&&v.months.length>=3){
+        const sr=smartRecommend(v);
+        Object.assign(v,sr);
+      }
+    });
 
     trData=vehicles.filter(v=>v.months&&v.months.length>0);
     const clients=[...new Set(vehicles.map(v=>v.client).filter(c=>c&&c!=='nan'))].sort();
