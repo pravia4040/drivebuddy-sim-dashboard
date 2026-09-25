@@ -2904,6 +2904,10 @@ setTimeout(cloudAutoLoad,1500);
   if(isAdmin){ try{ sessionStorage.setItem('dbai_edit_unlock',EDIT_SECRET); }catch(e){} }
   else{ try{ sessionStorage.removeItem('dbai_edit_unlock'); }catch(e){} }
 
+  // 60-minute session timeout. The dashboard boots here, not via guardPage(), so start it
+  // explicitly — and keep the veil up if the session has already expired.
+  if(window.SessionTimeout&&window.SessionTimeout.start()===false)return;
+
   veil.remove();
   init();
   applyViewerMode();

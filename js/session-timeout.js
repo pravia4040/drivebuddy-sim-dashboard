@@ -25,6 +25,8 @@
   };
 
   /* ── init ───────────────────────────────────────────────── */
+  // Returns false when the session has already expired (logout + redirect is under way),
+  // so callers can stop before rendering any data.
   function _start() {
     let loginAt = parseInt(localStorage.getItem(LS_KEY), 10);
     if (!loginAt || isNaN(loginAt)) {
@@ -36,7 +38,7 @@
 
     if (elapsed >= TIMEOUT_MS) {
       _expiredLogout();
-      return;
+      return false;
     }
 
     _clearTimers();
@@ -51,6 +53,7 @@
       _showWarningModal();
     }
     _logoutTimer = setTimeout(_expiredLogout, toLogout);
+    return true;
   }
 
   /* ── reset (Continue Session) ───────────────────────────── */

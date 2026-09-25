@@ -68,12 +68,12 @@ async function guardPage(minRole /* undefined | 'Admin' */) {
     if (event === 'SIGNED_OUT') window.location.replace('login.html');
   });
 
+  // Start (or resume) the 60-minute session timeout — before the overlay lifts,
+  // so an already-expired session never shows the page.
+  if (window.SessionTimeout && window.SessionTimeout.start() === false) return new Promise(()=>{});
+
   _clearOverlay();
   window.__AUTH_ROW__ = auth.row;   // { email, role, status, ... }
-
-  // Start (or resume) the 60-minute session timeout
-  if (window.SessionTimeout) window.SessionTimeout.start();
-
   return auth.row;
 }
 
