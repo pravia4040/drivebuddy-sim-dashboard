@@ -1094,13 +1094,70 @@ function rtFindCol(headers,candidates){
     const exact=headers.find(h=>h.trim()===cand);
     if(exact)return exact;
   }
-  // Substring match
+  // Substring match — never fall back onto a PAY AS YOU GO column (it would swap bundle usage for overage only)
   for(const cand of candidates){
     const lc=cand.toLowerCase().replace(/[^a-z]/g,'').substring(0,8);
-    const match=headers.find(h=>h.toLowerCase().replace(/[^a-z]/g,'').includes(lc));
+    const match=headers.find(h=>{const hl=h.toLowerCase().replace(/[^a-z]/g,'');return hl.includes(lc)&&!hl.includes('payasyougo');});
     if(match)return match;
   }
   return null;
+}
+
+// Portal numbers can arrive as formatted text ("2,04,800.00") — parseFloat alone stops at the first comma.
+function rtNum(v){
+  if(typeof v==='number')return isFinite(v)?v:0;
+  const s=String(v??'').replace(/[,\s]/g,'');
+  let n=Number(s);
+  if(!isFinite(n))n=parseFloat(s.replace(/[^0-9.eE+\-]/g,''));
+  return isFinite(n)?n:0;
+}
+
+// 'ok' = a real SIM/ICCID · 'sci' = Excel stored the ICCID as a number (digits already lost in the file)
+// 'bad' = total / footer / repeated-header rows, which must not be counted as SIMs
+function rtSimKind(s){
+  if(/^\d{10,22}$/.test(s))return'ok';
+  if(/^\d+(\.\d+)?e\+\d+$/i.test(s))return'sci';
+  return'bad';
+}
+
+// One row per SIM + consistent derived fields. Runs on fresh uploads AND on saved snapshots,
+// so snapshots stored before this fix get the same rules without a re-upload.
+function rtFinalize(rows){
+  rows=rows||[];
+  const bySim=new Map(),stats={skipped:0,sci:0,dupDropped:0,merged:0},skippedSample=[];
+  const sims=rows.map(r=>String(r.sim_no||'').replace(/\s+/g,''));
+  // Safety valve: if most rows fail the ICCID check, the file uses a different SIM format — keep everything
+  const strict=sims.filter(s=>rtSimKind(s)==='bad').length<=rows.length/2;
+  if(!strict)console.warn('[realtime] Most SIM values are not ICCID-shaped — keeping all rows. Sample:',sims.slice(0,5));
+  rows.forEach((r,i)=>{
+    const sim=sims[i];
+    const kind=rtSimKind(sim);
+    if(kind==='bad'&&strict){stats.skipped++;if(skippedSample.length<5)skippedSample.push(sim);return;}
+    if(kind==='sci')stats.sci++;
+    const row=Object.assign({},r,{sim_no:sim,alloc_mb:+r.alloc_mb||0,used_mb:+r.used_mb||0,avail_mb:+r.avail_mb||0});
+    // Mangled ICCIDs collide with each other ("8.99198E+18"), so never merge those
+    const key=kind==='sci'?sim+'#'+i:sim;
+    const prev=bySim.get(key);
+    if(!prev){bySim.set(key,row);return;}
+    // Same figures on a second row = the portal listed the SIM twice → count it once
+    if(prev.alloc_mb===row.alloc_mb&&prev.used_mb===row.used_mb&&prev.avail_mb===row.avail_mb){stats.dupDropped++;return;}
+    // Different figures (e.g. plan changed mid-cycle) → still one SIM, usage summed
+    prev.alloc_mb+=row.alloc_mb;prev.used_mb+=row.used_mb;prev.avail_mb+=row.avail_mb;
+    if(!prev.plan&&row.plan){prev.plan=row.plan;prev.plan_gb=row.plan_gb;}
+    stats.merged++;
+  });
+  const out=[...bySim.values()];
+  out.forEach(r=>{
+    r.alloc_gb=+(r.alloc_mb/1024).toFixed(2);
+    r.used_gb=+(r.used_mb/1024).toFixed(2);
+    r.avail_gb=+(r.avail_mb/1024).toFixed(2);
+    // Floor, not round: 99.96% must read 99.9% (CRITICAL), not 100.0% (EXCEEDED)
+    const p=r.alloc_mb>0?r.used_mb/r.alloc_mb*100:0;
+    r.used_pct=Math.floor(p*10+1e-9)/10;
+    r.flag=r.used_pct>=100?'EXCEEDED':r.used_pct>=90?'CRITICAL':r.used_pct>=75?'WARNING':r.used_pct>=50?'MODERATE':r.used_pct>=5?'OK':'WASTED';
+  });
+  if(skippedSample.length)console.log('[realtime] Skipped non-SIM rows, e.g.:',skippedSample);
+  return{rows:out,stats};
 }
 
 function processRealtime(){
@@ -1110,6 +1167,8 @@ function processRealtime(){
   const cols={};
   for(const k in RT_COL_MAP){cols[k]=rtFindCol(csv.headers,RT_COL_MAP[k]);}
   console.log('[realtime] Detected columns:',cols);
+  const paygCols=csv.headers.filter(h=>/pay\s*as\s*you\s*go/i.test(h));
+  if(paygCols.length)console.log('[realtime] PAY AS YOU GO columns in file (not counted in Used):',paygCols);
   if(!cols.sim||!cols.alloc||!cols.used){
     showToast('❌ Missing required columns in real-time file. Need SIM NO, TOTAL ALLOCATED, TOTAL USED.','error');
     document.getElementById('proc-bar').style.display='none';return;
@@ -1135,36 +1194,34 @@ function processRealtime(){
   }
   console.log('[realtime] SIM→Vehicle map source:',vehSource,'entries:',Object.keys(simToVeh).length);
 
-  // Build rtRows
-  rtRows=[];
-  let unmatched=0;
+  // Build raw rows; rtFinalize() then makes it one row per SIM and derives GB / % / flag
+  const raw=[];
   csv.rows.forEach(r=>{
-    const sim=cleanSim(String(r[cols.sim]||'').trim());
+    const sim=cleanSim(String(r[cols.sim]||'').trim()).replace(/\s+/g,'');
     if(!sim||sim==='nan')return;
-    const alloc_mb=parseFloat(r[cols.alloc])||0;
-    const used_mb=parseFloat(r[cols.used])||0;
-    const avail_mb=cols.avail?parseFloat(r[cols.avail])||0:Math.max(0,alloc_mb-used_mb);
+    const alloc_mb=rtNum(r[cols.alloc]);
+    const used_mb=rtNum(r[cols.used]);
+    const avail_mb=cols.avail?rtNum(r[cols.avail]):Math.max(0,alloc_mb-used_mb);
     const plan=String(r[cols.plan]||'').trim();
-    const plan_gb=extractGB(plan);
-    const used_pct=alloc_mb>0?Math.round(used_mb/alloc_mb*1000)/10:0;
-    const flag=used_pct>=100?'EXCEEDED':used_pct>=90?'CRITICAL':used_pct>=75?'WARNING':used_pct>=50?'MODERATE':used_pct>=5?'OK':'WASTED';
     const veh=simToVeh[sim]||{};
-    if(!veh.reg)unmatched++;
-    rtRows.push({
+    raw.push({
       sim_no:sim,
       reg:veh.reg||'—',
       client:veh.client||'—',
       hw_id:veh.hw_id||'',
-      plan,plan_gb,
+      plan,plan_gb:extractGB(plan),
       alloc_mb,used_mb,avail_mb,
-      alloc_gb:Math.round(alloc_mb/1024*10)/10,
-      used_gb:Math.round(used_mb/1024*100)/100,
-      avail_gb:Math.round(avail_mb/1024*10)/10,
-      used_pct,flag,
       sim_status:'Active', // real-time data implies SIM is active
     });
   });
-  console.log('[realtime] Total SIMs processed:',rtRows.length,'| Unmatched to vehicles:',unmatched);
+  const fin=rtFinalize(raw);
+  rtRows=fin.rows;
+  const unmatched=rtRows.filter(r=>r.reg==='—').length;
+  console.log('[realtime] File rows:',raw.length,'→ unique SIMs:',rtRows.length,'| Unmatched to vehicles:',unmatched,'| Clean-up:',fin.stats);
+  if(fin.stats.sci)console.warn('[realtime]',fin.stats.sci,'SIM numbers are in scientific notation in the source file — Excel stored them as numbers, so their last digits are already lost. Export the SIM column as Text from the portal.');
+  const notes=[];
+  if(fin.stats.dupDropped+fin.stats.merged)notes.push(`${fin.stats.dupDropped+fin.stats.merged} repeated SIM row(s) merged`);
+  if(fin.stats.skipped)notes.push(`${fin.stats.skipped} non-SIM row(s) skipped`);
 
   setProgress(100,'Done!');
   setTimeout(()=>{
@@ -1179,7 +1236,7 @@ function processRealtime(){
     }
     renderRT();        // Render the data first
     showTab('realtime'); // Then switch to the tab (which also calls renderRT)
-    showToast(`✅ ${rtRows.length} SIMs loaded · ${rtRows.length-unmatched} matched to vehicles`,'success');
+    showToast(`✅ ${rtRows.length} SIMs loaded · ${rtRows.length-unmatched} matched to vehicles${notes.length?' · '+notes.join(' · '):''}`,'success');
     // Auto-push to cloud if we're in edit mode and Supabase is ready
     if(EDIT_MODE&&sb){
       console.log('[realtime] Auto-syncing to cloud after upload…');
@@ -1251,19 +1308,22 @@ function rtSelectPlan(planName){
 }
 
 function renderRTRibbon(){
-  // Ribbon updates based on filtered data
-  const rows=rtFilt.length?rtFilt:rtRows;
+  // Always the filtered set — a filter that matches nothing must show zeros, not the whole snapshot
+  const rows=rtFilt;
   const totalSims=rows.length;
+  const mapped=rows.filter(r=>r.reg&&r.reg!=='—').length;
   const totalAlloc=rows.reduce((s,r)=>s+r.alloc_mb,0);
   const totalUsed=rows.reduce((s,r)=>s+r.used_mb,0);
   const totalAvail=rows.reduce((s,r)=>s+r.avail_mb,0);
-  const overallPct=totalAlloc>0?Math.round(totalUsed/totalAlloc*1000)/10:0;
-  const wastedSims=rows.filter(r=>r.used_pct<5).length;
+  const planGb=rows.reduce((s,r)=>s+(r.plan_gb||0),0);
+  const usedPct=totalAlloc>0?Math.round(totalUsed/totalAlloc*1000)/10:0;
+  const availPct=totalAlloc>0?Math.round(totalAvail/totalAlloc*1000)/10:0;
+  const wastedSims=rows.filter(r=>r.flag==='WASTED').length;
   document.getElementById('rt-ribbon').innerHTML=`
-    <div class="dgr orange"><div class="dgr-lbl">Total SIMs</div><div class="dgr-val">${totalSims.toLocaleString()}</div><div class="dgr-sub">Live from portal</div></div>
-    <div class="dgr"><div class="dgr-lbl">Total Allocated</div><div class="dgr-val">${Math.round(totalAlloc/1024).toLocaleString()} GB</div><div class="dgr-sub">Current cycle</div></div>
-    <div class="dgr"><div class="dgr-lbl">Total Used</div><div class="dgr-val" style="color:#4ade80">${Math.round(totalUsed/1024).toLocaleString()} GB</div><div class="dgr-sub">${overallPct}% of allocated</div></div>
-    <div class="dgr" style="border-color:rgba(239,68,68,.3)"><div class="dgr-lbl">Available (Unused)</div><div class="dgr-val" style="color:#ef4444">${Math.round(totalAvail/1024).toLocaleString()} GB</div><div class="dgr-sub">${(100-overallPct).toFixed(1)}% remaining · ${wastedSims} SIMs &lt;5% used</div></div>`;
+    <div class="dgr orange"><div class="dgr-lbl">Total SIMs</div><div class="dgr-val">${totalSims.toLocaleString()}</div><div class="dgr-sub">${mapped.toLocaleString()} mapped to vehicles · ${(totalSims-mapped).toLocaleString()} unmapped</div></div>
+    <div class="dgr"><div class="dgr-lbl">Total Allocated</div><div class="dgr-val">${Math.round(totalAlloc/1024).toLocaleString()} GB</div><div class="dgr-sub">Current cycle${planGb?` · plan sizes add up to ${planGb.toLocaleString()} GB`:''}</div></div>
+    <div class="dgr"><div class="dgr-lbl">Total Used</div><div class="dgr-val" style="color:#4ade80">${Math.round(totalUsed/1024).toLocaleString()} GB</div><div class="dgr-sub">${usedPct}% of allocated</div></div>
+    <div class="dgr" style="border-color:rgba(239,68,68,.3)"><div class="dgr-lbl">Available (Unused)</div><div class="dgr-val" style="color:#ef4444">${Math.round(totalAvail/1024).toLocaleString()} GB</div><div class="dgr-sub">${availPct}% remaining · ${wastedSims.toLocaleString()} SIMs &lt;5% used</div></div>`;
 }
 
 // Clickable status-count chips (always computed from the FULL snapshot, not the filtered subset)
@@ -1299,8 +1359,8 @@ function rtSetFlag(flag){
 }
 
 function renderRTPlanCards(){
-  // Use filtered data for plan card counts
-  const rows=rtFilt.length?rtFilt:rtRows;
+  // Use filtered data for plan card counts (empty filter result → the "no data" message below)
+  const rows=rtFilt;
   const currentPlan=document.getElementById('rt-plan').value;
   const pm={};
   rows.forEach(r=>{
@@ -2641,7 +2701,9 @@ async function rtLoadSnapshot(snapId){
   try{
     const {data,error}=await sb.from('realtime_snapshots').select('snapshot_date,data').eq('id',snapId).single();
     if(error)throw error;
-    rtRows=data.data||[];
+    const fin=rtFinalize(data.data||[]);
+    rtRows=fin.rows;
+    if(fin.stats.skipped||fin.stats.dupDropped||fin.stats.merged)console.log('[realtime] Snapshot clean-up:',fin.stats,'→',rtRows.length,'unique SIMs');
     rtFilt=[];
     document.getElementById('rt-snapshot-info').style.display='';
     const d=new Date(data.snapshot_date);
@@ -2806,7 +2868,7 @@ async function cloudAutoLoad(){
       // Fallback to legacy single-row table
       const {data:legacy}=await sb.from('realtime_snapshot').select('data,uploaded_at').eq('id',1).maybeSingle();
       if(legacy&&legacy.data){
-        rtRows=legacy.data;
+        rtRows=rtFinalize(legacy.data).rows;
         document.getElementById('rt-snapshot-info').style.display='';
         document.getElementById('rt-snapshot-date').textContent=new Date(legacy.uploaded_at).toLocaleString('en-IN');
         renderRT();
