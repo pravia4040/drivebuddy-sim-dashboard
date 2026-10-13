@@ -326,6 +326,310 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 .footer{text-align:center;padding:20px;font-family:'Mulish',sans-serif;font-size:10px;color:var(--gr);letter-spacing:1px;text-transform:uppercase;border-top:1px solid var(--b1);margin-top:28px;}
 .footer span{color:var(--or);}
 
+/* ── MULTI-PROVIDER ─────────────────────────────────────────────────── */
+.prov-bar{display:flex;align-items:center;gap:4px;background:#111;border:1px solid var(--b2);border-radius:8px;padding:3px;flex-wrap:nowrap;flex-shrink:0;white-space:nowrap;}
+.prov-lbl{font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;color:var(--or);letter-spacing:1px;text-transform:uppercase;padding:0 6px 0 4px;}
+.prov-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:6px;border:none;background:transparent;color:var(--gr);font-family:'Poppins',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;}
+.prov-btn i,.prov-chip i,.pv-key,.pv-legend i,.pv-sec-h i{display:inline-block;width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+.pv-key{margin-right:6px;vertical-align:1px;}
+.prov-btn:hover:not(:disabled):not(.active){background:#1a1a1a;color:var(--sl);}
+.prov-btn.active{background:var(--or);color:var(--ink);font-weight:600;}
+.prov-btn:disabled{opacity:.45;cursor:not-allowed;}
+.tabs-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
+.tabs-row .tabs{margin-bottom:0;}
+/* phones: the tab bar scrolls sideways instead of widening the page (desktop unchanged) */
+@media(max-width:900px){.tabs{max-width:100%;overflow-x:auto;scrollbar-width:thin;}.tabs .tab{flex:0 0 auto;}}
+@media(max-width:600px){.hdr{padding:12px 16px;}.hdr-right{flex-wrap:wrap;row-gap:8px;}}
+/* long VI labels (deal names, "No vehicle · <mobile no.>", the as-of picker) must not widen the page on phones */
+.pv-2col>*,.pv-3col>*{min-width:0;}
+@media(max-width:900px){.pv-card{overflow-x:auto;}}
+#rt-prov-ctrl{max-width:100%;min-width:0;}
+.trend-grid{grid-template-columns:repeat(auto-fill,minmax(min(440px,100%),1fr));}
+.plan-grid{grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));}
+.trend-card{min-width:0;overflow-wrap:anywhere;}
+.plan-card-hdr{gap:8px;}.plan-card-hdr>:first-child{min-width:0;overflow-wrap:anywhere;}
+.prov-chip{display:inline-flex;align-items:center;gap:6px;font-family:'Poppins',sans-serif;font-size:12px;color:var(--sl);background:var(--dc);border:1px solid var(--b2);border-radius:20px;padding:5px 12px;}
+.prov-chip-k{font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;color:var(--gr);letter-spacing:1px;text-transform:uppercase;}
+.prov-chip-s{color:var(--gr);font-size:11px;}
+.prov-badge{display:inline-flex;align-items:center;gap:4px;font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;color:var(--sl);background:#1a1a1a;border:1px solid var(--b2);border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:1px;}
+.prov-badge::before{content:'';width:6px;height:6px;border-radius:2px;background:var(--pc);}
+.up-prov-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#141414;border:1px solid #1f1f1f;border-radius:10px;padding:10px 14px;margin-bottom:14px;}
+.up-prov-hint{font-family:'Mulish',sans-serif;font-size:11px;color:var(--gr);}
+.pv-note{font-family:'Mulish',sans-serif;font-size:11.5px;color:var(--gr);line-height:1.6;background:var(--dc);border:1px solid var(--b2);border-radius:9px;padding:10px 14px;margin-bottom:14px;}
+.pv-note b{color:var(--sl);}
+.pv-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.pv-3col{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;}
+.pv-card{background:var(--dc);border:1px solid var(--b2);border-radius:10px;padding:14px 16px;margin-bottom:12px;}
+.pv-card-t{font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;color:var(--sl);margin-bottom:10px;}
+.pv-big{font-family:'Poppins',sans-serif;font-size:24px;font-weight:700;color:var(--wh);line-height:1.2;}
+.pv-muted{font-family:'Mulish',sans-serif;font-size:11px;color:var(--gr);line-height:1.5;}
+.pv-foot{margin:4px 0 18px;}
+.pv-ok{font-family:'Mulish',sans-serif;font-size:12px;color:#4ade80;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:9px 13px;margin-bottom:12px;}
+.pv-warn{font-family:'Mulish',sans-serif;font-size:12px;color:#ffb366;background:rgba(255,123,0,.07);border:1px solid rgba(255,123,0,.25);border-radius:8px;padding:9px 13px;margin-bottom:12px;}
+.pv-table{width:100%;border-collapse:collapse;font-family:'Poppins',sans-serif;font-size:12px;}
+.pv-table th{font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.8px;text-align:left;padding:7px 8px;border-bottom:1px solid var(--b2);white-space:nowrap;}
+.pv-table td{padding:7px 8px;border-bottom:1px solid #1a1a1a;color:var(--sl);}
+.pv-table .num{text-align:right;font-variant-numeric:tabular-nums;}
+.pv-table .mono,.mono{font-family:'Roboto',monospace;font-size:11px;}
+.pv-table .pv-tot{color:var(--wh);font-weight:600;}
+.pv-cmp td:first-child{color:var(--gr);}
+.pv-fn{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pv-sec{margin-bottom:22px;}
+.pv-sec-h{display:flex;align-items:center;gap:8px;font-family:'Poppins',sans-serif;font-size:14px;color:var(--wh);margin-bottom:12px;flex-wrap:wrap;}
+.pv-meter{height:8px;background:#1e1e1e;border-radius:4px;overflow:hidden;margin:-4px 0 12px;}
+.pv-meter div{height:8px;border-radius:4px;}
+.pv-rec{font-family:'Poppins',sans-serif;font-size:12px;color:var(--sl);line-height:1.6;border-radius:9px;padding:11px 14px;margin-bottom:12px;border:1px solid var(--b2);background:var(--dc);}
+.pv-rec b{color:var(--wh);}
+.pv-rec-oversized{border-color:rgba(255,123,0,.35);}
+.pv-rec-at_risk{border-color:rgba(239,68,68,.4);}
+.pv-rec-healthy{border-color:rgba(34,197,94,.3);}
+.pv-rec-estimate{border-color:rgba(255,123,0,.35);}
+/* pool strip — the shared pool of each pooled provider in view, above every tab */
+#pool-strip{margin:-8px 0 18px;}
+.ps-row{display:flex;align-items:center;flex-wrap:wrap;gap:10px 26px;background:var(--dc);border:1px solid var(--b2);border-left:3px solid var(--pc);border-radius:10px;padding:12px 16px;margin-bottom:8px;}
+.ps-h{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;flex-basis:100%;font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;color:var(--wh);}
+.ps-h i{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--pc);flex-shrink:0;}
+.ps-h .ps-s{font-weight:400;}
+.ps-k{font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;color:var(--gr);letter-spacing:1px;text-transform:uppercase;}
+.ps-v{font-family:'Poppins',sans-serif;font-size:19px;font-weight:700;color:var(--wh);line-height:1.3;font-variant-numeric:tabular-nums;}
+.ps-s{font-family:'Mulish',sans-serif;font-size:11px;color:var(--gr);}
+.ps-m{flex:1;min-width:160px;}
+.ps-m .pv-meter{margin:0 0 5px;}
+.ps-est{font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;color:#ffb366;background:rgba(255,123,0,.1);border:1px solid rgba(255,123,0,.3);border-radius:4px;padding:1px 6px;letter-spacing:.6px;text-transform:uppercase;}
+.ps-link{background:transparent;border:1px solid var(--b2);color:var(--sl);border-radius:7px;padding:6px 11px;font-family:'Poppins',sans-serif;font-size:11px;cursor:pointer;white-space:nowrap;}
+.ps-link:hover,.ps-link:focus-visible{border-color:var(--or);color:var(--or);}
+.ps-note{flex-basis:100%;font-family:'Mulish',sans-serif;font-size:11.5px;color:#ffb366;line-height:1.5;}
+.ps-asof{font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;color:var(--ink);background:var(--sl);border-radius:4px;padding:1px 7px;}
+/* "as of" day: Real-time picker, faded later days, outlined chosen day */
+.rt-asof{display:inline-flex;align-items:center;gap:6px;max-width:100%;}
+.rt-asof .fsel{min-width:0;max-width:100%;}
+.rt-asof-k{font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;color:var(--gr);letter-spacing:1px;text-transform:uppercase;white-space:nowrap;}
+.pv-bar.pv-dim{opacity:.35;}
+.pv-bar.pv-sel{box-shadow:0 0 0 2px var(--wh);}
+.pv-pick .pv-bar{cursor:pointer;}
+@media(max-width:600px){.ps-row{gap:10px 18px;}.ps-c{min-width:40%;}.ps-link{flex-basis:100%;}}
+.pv-pills{display:flex;flex-wrap:wrap;gap:6px;}
+.pv-pill{font-family:'Poppins',sans-serif;font-size:11px;color:var(--sl);background:#1a1a1a;border:1px solid var(--b2);border-radius:20px;padding:3px 10px;}
+.pv-pill b{color:var(--wh);margin-left:3px;}
+/* charts: thin columns, 4px rounded caps from one baseline, hairline grid */
+.pv-legend{display:flex;gap:14px;font-family:'Mulish',sans-serif;font-size:11px;color:var(--sl);margin-bottom:6px;}
+.pv-legend span{display:inline-flex;align-items:center;gap:6px;}
+.pv-chart{padding:16px 0 20px 46px;}
+.pv-plot{position:relative;}
+.pv-grid{position:absolute;left:0;right:0;border-top:1px solid #222;}
+.pv-grid.pv-base{border-top-color:#383835;}
+.pv-grid span{position:absolute;left:-46px;top:-7px;width:40px;text-align:right;font-family:'Roboto',monospace;font-size:10px;color:var(--gr);font-variant-numeric:tabular-nums;}
+.pv-groups{position:absolute;inset:0;display:flex;}
+.pv-grp{flex:1;min-width:0;position:relative;display:flex;align-items:flex-end;justify-content:center;}
+.pv-bars{display:flex;align-items:flex-end;gap:2px;}
+.pv-bar{position:relative;border-radius:4px 4px 0 0;outline:none;transition:filter .12s;}
+.pv-bar:hover,.pv-bar:focus-visible{filter:brightness(1.3);}
+.pv-bar:focus-visible{box-shadow:0 0 0 2px var(--sl);}
+.pv-cap{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:3px;font-family:'Poppins',sans-serif;font-size:10px;font-weight:600;color:var(--sl);white-space:nowrap;}
+.pv-x{position:absolute;top:100%;left:-10px;right:-10px;margin-top:4px;text-align:center;font-family:'Mulish',sans-serif;font-size:10px;color:var(--gr);white-space:nowrap;}
+.pv-tip{position:fixed;z-index:100000;display:none;pointer-events:none;background:#1f1f1f;border:1px solid #333;border-radius:7px;padding:6px 10px;font-family:'Poppins',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+.pv-tip b{display:block;font-size:13px;color:var(--wh);}
+.pv-tip span{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--gr);}
+.pv-tip i{display:inline-block;width:10px;height:2px;border-radius:1px;}
+.pv-tv{margin-top:4px;max-width:100%;overflow-x:auto;}
+.pv-tv summary{font-family:'Mulish',sans-serif;font-size:11px;color:var(--gr);cursor:pointer;}
+.pv-tv summary:hover{color:var(--or);}
+.pv-tv table{margin-top:6px;}
+/* VI upload */
+.vi-drop{min-height:90px;margin-bottom:12px;}
+.vi-cards{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+.vi-card{background:#141414;border:1px solid #1f1f1f;border-radius:9px;padding:10px 13px;}
+.vi-card.vi-ok{border-color:rgba(34,197,94,.35);}
+.vi-card.vi-warn{border-color:rgba(255,123,0,.35);}
+.vi-card.vi-bad{border-color:rgba(239,68,68,.4);}
+.vi-card.vi-dup{border-color:rgba(96,165,250,.35);}
+.vi-card.vi-missing{border-style:dashed;}
+.vi-card-h{display:flex;align-items:center;gap:8px;font-family:'Poppins',sans-serif;font-size:12px;color:var(--wh);}
+.vi-ic{width:18px;text-align:center;}
+.vi-fn{font-family:'Roboto',monospace;font-size:10px;color:var(--gr);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;}
+.vi-opt{font-family:'Mulish',sans-serif;font-size:10px;color:var(--gr);margin-left:auto;}
+.vi-x{background:transparent;border:1px solid var(--b2);color:var(--gr);border-radius:5px;width:22px;height:22px;cursor:pointer;flex-shrink:0;}
+.vi-x:hover{border-color:#ef4444;color:#ef4444;}
+.vi-card-s{font-family:'Mulish',sans-serif;font-size:11px;color:var(--gr);margin-top:5px;line-height:1.5;}
+.vi-stats{display:flex;flex-wrap:wrap;gap:4px 14px;font-family:'Mulish',sans-serif;font-size:11px;color:var(--gr);margin-top:6px;}
+.vi-stats b{color:var(--sl);font-family:'Poppins',sans-serif;}
+.vi-stats .vi-w b{color:var(--or);}.vi-stats .vi-e b{color:#ef4444;}
+.vi-err{font-family:'Mulish',sans-serif;font-size:11.5px;color:#fca5a5;margin-top:6px;}
+.vi-dup{font-family:'Mulish',sans-serif;font-size:11.5px;color:#93c5fd;margin-top:6px;}
+.vi-note{font-family:'Mulish',sans-serif;font-size:11.5px;color:#ffb366;margin-top:6px;width:100%;}
+.vi-switch{margin-top:8px;background:var(--dc);border:1px solid var(--or);color:var(--or);border-radius:6px;padding:5px 11px;font-family:'Poppins',sans-serif;font-size:11.5px;cursor:pointer;}
+.vi-switch:hover,.vi-switch:focus-visible{background:var(--or);color:var(--ink);}
+.vi-month{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#141414;border:1px solid #1f1f1f;border-radius:9px;padding:10px 13px;margin-bottom:10px;}
+.vi-recon{font-family:'Mulish',sans-serif;font-size:11.5px;color:var(--gr);background:#141414;border:1px solid #1f1f1f;border-radius:9px;padding:9px 13px;margin-bottom:10px;line-height:1.6;}
+.vi-recon b{color:var(--sl);}
+.vi-recon.ok{border-color:rgba(34,197,94,.3);}.vi-recon.ok b{color:#4ade80;}
+.vi-recon.warn{border-color:rgba(255,123,0,.35);}.vi-recon.warn b{color:var(--or);}
+.vi-del{margin-left:auto;background:transparent;border:1px solid var(--b2);color:var(--gr);border-radius:6px;padding:3px 9px;font-family:'Poppins',sans-serif;font-size:11px;cursor:pointer;}
+.vi-del:hover,.vi-del:focus-visible{border-color:#ef4444;color:#ef4444;}
+.pv-card-t:has(.vi-del){display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.vi-issues{margin-top:6px;font-family:'Mulish',sans-serif;font-size:11px;color:var(--gr);}
+.vi-issues summary{cursor:pointer;}.vi-issues summary:hover{color:var(--or);}
+.vi-issues table{width:100%;border-collapse:collapse;margin-top:6px;max-height:220px;display:block;overflow:auto;}
+.vi-issues td,.vi-issues th{padding:4px 6px;border-bottom:1px solid #1a1a1a;text-align:left;font-size:10.5px;}
+.sp-Ready{background:rgba(117,117,117,.12);color:var(--gr);}
+.sp-Suspended{background:rgba(239,68,68,.1);color:#f87171;}
+.sp-Dunning{background:rgba(255,123,0,.1);color:#ffb366;}
+/* pool: tiles, cycle line, alerts, status table, SIM-wise table */
+.dg-ribbon.dg6{grid-template-columns:repeat(6,1fr);}
+.pv-cyc{font-family:'Mulish',sans-serif;font-size:12px;color:var(--gr);margin:-4px 0 12px;line-height:1.6;}
+.pv-cyc b{color:var(--sl);font-weight:600;}
+.pv-2top{align-items:start;}
+.pv-alerts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
+.pv-al{display:flex;gap:7px;align-items:baseline;font-family:'Mulish',sans-serif;font-size:12px;color:var(--sl);line-height:1.5;padding:7px 10px;border-radius:7px;background:#141414;border:1px solid #1f1f1f;}
+.pv-al b{flex-shrink:0;}
+.pv-al-critical{border-color:rgba(239,68,68,.45);}.pv-al-critical b{color:#f87171;}
+.pv-al-warning{border-color:rgba(255,123,0,.35);}.pv-al-warning b{color:#ffb366;}
+.pv-al-info b{color:#93c5fd;}
+.pv-why{font-family:'Mulish',sans-serif;font-size:11px;color:var(--gr);}
+.pv-bad td{color:#ffb366;}
+.vi-rule{display:inline-flex;align-items:center;gap:5px;cursor:pointer;}
+.vi-yes{color:#4ade80;}
+.vi-frozen,.ps-frozen{font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;color:#93c5fd;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);border-radius:4px;padding:1px 6px;letter-spacing:.6px;text-transform:uppercase;}
+.pv-sims summary{cursor:pointer;list-style:none;margin:0;}
+.pv-sims summary::-webkit-details-marker{display:none;}
+.pv-sims summary::before{content:'▸ ';color:var(--gr);}
+.pv-sims[open] summary::before{content:'▾ ';}
+.pv-sims-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0;}
+.pv-sims-bar input{flex:1;min-width:0;max-width:420px;}
+.pv-sims-tw{max-height:520px;overflow:auto;}
+.pv-sims-tw thead th{position:sticky;top:0;background:var(--dc);z-index:1;}
+.vi-ck{width:100%;border-collapse:collapse;margin:0 0 12px;font-family:'Mulish',sans-serif;font-size:11.5px;background:#141414;border:1px solid #1f1f1f;}
+.vi-ck th{font-size:10px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.8px;text-align:left;padding:7px 10px;border-bottom:1px solid #1f1f1f;}
+.vi-ck td{padding:6px 10px;border-bottom:1px solid #1a1a1a;color:var(--sl);vertical-align:top;}
+.vi-ck .vi-ck-s{color:var(--gr);}
+.vi-ck-tag{font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px;white-space:nowrap;}
+.vi-ck-tag.ok{color:#4ade80;background:rgba(34,197,94,.1);}
+.vi-ck-tag.add{color:#93c5fd;background:rgba(96,165,250,.12);}
+.vi-ck-tag.miss{color:#f87171;background:rgba(239,68,68,.1);}
+.vi-ck-tag.old{color:#ffb366;background:rgba(255,123,0,.1);}
+/* VI operations: level badge, operations block, pop-up, SVG charts, SIM page */
+.ops-lvl{display:inline-flex;align-items:center;gap:4px;font-family:'Mulish',sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;border-radius:5px;padding:2px 8px;white-space:nowrap;border:1px solid;}
+.ops-critical{color:#fca5a5;background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.5);}
+.ops-warning{color:#ffb366;background:rgba(255,123,0,.12);border-color:rgba(255,123,0,.45);}
+.ops-healthy{color:#4ade80;background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.35);}
+.ops-closed{color:var(--gr);background:#1a1a1a;border-color:var(--b2);}
+.ops-row{background:var(--dc);border:1px solid var(--b2);border-left:3px solid var(--pc);border-radius:10px;padding:12px 16px;margin-bottom:8px;}
+.ops-row.ops-r-critical{border-color:rgba(239,68,68,.55);border-left-color:#ef4444;background:linear-gradient(0deg,rgba(239,68,68,.05),rgba(239,68,68,.05)),var(--dc);}
+.ops-row.ops-r-warning{border-color:rgba(255,123,0,.45);border-left-color:var(--or);}
+.ops-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;font-family:'Poppins',sans-serif;font-size:13px;color:var(--wh);margin-bottom:10px;}
+.ops-msg{font-family:'Mulish',sans-serif;font-size:12.5px;color:var(--sl);flex-basis:100%;line-height:1.5;}
+.ops-r-critical .ops-msg{color:#fecaca;font-weight:600;}
+.ops-cells{display:flex;flex-wrap:wrap;align-items:center;gap:10px 26px;}
+.ops-risk .ps-v{color:var(--wh);}
+.ops-r-critical .ops-risk .ps-v{color:#fca5a5;}
+.ops-zero-btn{display:flex;flex-direction:column;align-items:flex-start;background:transparent;border:1px solid var(--b2);border-radius:8px;padding:5px 10px;cursor:pointer;text-align:left;}
+.ops-zero-btn:hover,.ops-zero-btn:focus-visible{border-color:var(--or);}
+.ops-act{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px;}
+.ops-reason{font-family:'Mulish',sans-serif;font-size:12.5px;color:var(--sl);line-height:1.55;margin-bottom:10px;}
+.ops-chg{display:block;font-family:'Mulish',sans-serif;font-size:11.5px;font-weight:500;color:var(--sl);margin-top:3px;}
+.ops-pop .ops-chg{margin:0 0 8px;padding:6px 9px;border:1px solid rgba(239,68,68,.35);border-radius:6px;}
+.ops-fc .ops-fc-h td{font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;color:var(--wh);background:#161616;padding-top:9px;}
+.ops-fc td:first-child{white-space:nowrap;color:var(--sl);}
+.ops-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;}
+.ops-chip{background:#141414;border:1px solid var(--b2);color:var(--sl);border-radius:16px;padding:3px 10px;font-family:'Mulish',sans-serif;font-size:11.5px;cursor:pointer;}
+.ops-chip b{color:var(--wh);margin-left:3px;}
+.ops-chip.on,.ops-chip:hover,.ops-chip:focus-visible{border-color:var(--or);color:var(--or);}
+.pv-linkbtn{background:none;border:none;padding:0;color:var(--sl);cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;font:inherit;}
+.pv-linkbtn.mono{font-family:'Roboto',monospace;font-size:11px;}
+.pv-linkbtn:hover,.pv-linkbtn:focus-visible{color:var(--or);}
+.ops-pop{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;}
+.ops-pop-card{width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--dc);border:1px solid rgba(239,68,68,.6);border-radius:12px;padding:18px 20px;box-shadow:0 18px 48px rgba(0,0,0,.6);}
+.ops-pop-card p{font-family:'Mulish',sans-serif;font-size:12.5px;color:var(--sl);line-height:1.55;}
+.ops-pop-h{font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;color:#fca5a5;margin-bottom:6px;}
+.ops-pop-a{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
+.pv-sim-card{position:relative;width:min(980px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--dc);border:1px solid var(--b2);border-radius:12px;padding:18px 20px;box-shadow:0 18px 48px rgba(0,0,0,.6);}
+.pv-sim-x{position:absolute;top:12px;right:12px;}
+.pv-sim-card .pv-table td:first-child{white-space:nowrap;}
+@media(max-width:600px){.pv-sim-card{padding:16px 14px;}}
+.pv-sim-h{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-right:30px;}
+.pv-sim-h>i{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+.pv-sim-t{font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;color:var(--wh);word-break:break-all;}
+.pv-svg svg{display:block;width:100%;height:auto;}
+.sv-grid{stroke:#222;stroke-width:1;}.sv-base{stroke:#383835;}
+.sv-yl{font-family:'Roboto',monospace;font-size:10px;fill:var(--gr);text-anchor:end;}
+.sv-xl{font-family:'Mulish',sans-serif;font-size:10px;fill:var(--gr);text-anchor:middle;}
+.sv-line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;}
+.sv-dash{stroke-dasharray:6 5;}
+.sv-area{opacity:.16;}
+.sv-dot{stroke:var(--dc);stroke-width:1.2;}
+.sv-dot.sv-zero{fill:var(--dc);stroke:var(--gr);stroke-width:1.6;}
+.sv-dot.sv-high{stroke:var(--wh);stroke-width:1.6;}
+.sv-dot.sv-up{fill:var(--dc);stroke-width:2;}
+.sv-nodata{fill:rgba(255,255,255,.035);}
+.sv-ref{stroke:var(--sl);stroke-width:1;stroke-dasharray:3 3;opacity:.75;}
+.sv-refl{font-family:'Mulish',sans-serif;font-size:10px;fill:var(--sl);text-anchor:end;}
+.sv-v{stroke:var(--gr);stroke-width:1;stroke-dasharray:2 3;}
+.sv-v.crit{stroke:#f87171;}
+.sv-vl{font-family:'Mulish',sans-serif;font-size:10px;fill:var(--gr);}
+.sv-vl.crit{fill:#f87171;font-weight:700;}
+.sv-hit{fill:transparent;outline:none;}
+.sv-hit:hover,.sv-hit:focus-visible{fill:rgba(255,255,255,.05);}
+.pv-legend .lg-dash{width:14px;height:0;border-top:2px dashed;background:transparent!important;}
+.pv-legend .lg-ref{width:14px;height:0;border-top:1px dashed var(--sl);}
+.pv-legend .lg-nodata{width:12px;height:10px;background:rgba(255,255,255,.08);}
+@media(max-width:1300px){.dg-ribbon.dg6{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:600px){.dg-ribbon.dg6{grid-template-columns:1fr 1fr;}.vi-ck th:nth-child(2),.vi-ck td:nth-child(2){display:none;}}
+@media(max-width:1100px){.pv-2col,.pv-3col{grid-template-columns:1fr;}}
+/* narrow screens: the provider selector gets its own full-width row in the sticky header */
+@media(max-width:1500px){.hdr{flex-wrap:wrap;row-gap:10px;}.prov-bar{order:10;flex-basis:100%;overflow-x:auto;}}
+/* universal SIM search (js/providers/search.js) — in the header on every page */
+.ss{position:relative;flex:1 1 260px;max-width:440px;min-width:0;}
+.ss-box{display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;background:#141414;border:1px solid var(--b2);border-radius:8px;transition:border-color .15s;}
+.ss-box:focus-within{border-color:var(--or);}
+.ss-ico{font-size:13px;flex-shrink:0;opacity:.8;}
+.ss-in{flex:1;min-width:0;height:100%;background:none;border:none;outline:none;color:var(--wh);font-family:'Mulish',sans-serif;font-size:13px;}
+.ss-in::placeholder{color:#727272;}
+.ss-in::-webkit-search-cancel-button{filter:invert(.6);}
+.ss-kbd,.ss-hint kbd{font-family:'Roboto',monospace;font-size:10px;color:var(--gr);border:1px solid var(--b2);border-radius:4px;padding:1px 5px;}
+.ss-panel{position:absolute;top:calc(100% + 6px);left:0;width:min(560px,calc(100vw - 32px));max-height:min(72vh,660px);overflow:auto;background:#111;border:1px solid var(--b2);border-radius:10px;box-shadow:0 18px 48px rgba(0,0,0,.65);z-index:400;padding:8px;}
+.ss-h{font-family:'Mulish',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gr);padding:6px 8px;}
+.ss-item{display:flex;width:100%;align-items:center;gap:10px;text-align:left;background:none;border:1px solid transparent;border-radius:7px;padding:8px;cursor:pointer;color:var(--sl);font:inherit;}
+.ss-item:hover,.ss-item.on,.ss-item:focus-visible{background:#1a1a1a;border-color:var(--b2);outline:none;}
+.ss-main{flex:1;min-width:0;}
+.ss-sim{display:block;font-family:'Roboto',monospace;font-size:12.5px;color:var(--wh);word-break:break-all;}
+.ss-sim.ss-big{font-size:15px;font-weight:600;}
+.ss-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;font-family:'Mulish',sans-serif;font-size:11px;color:var(--gr);}
+.ss-why{font-family:'Mulish',sans-serif;font-size:10.5px;color:var(--gr);white-space:nowrap;}
+.ss-pb{display:inline-flex;align-items:center;gap:5px;font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;line-height:1.5;padding:1px 8px;border-radius:999px;border:1px solid var(--pc);color:var(--wh);background:#161616;}
+.ss-pb i{width:8px;height:8px;border-radius:2px;background:var(--pc);}
+.ss-st{display:inline-block;font-family:'Mulish',sans-serif;font-size:11px;font-weight:700;line-height:1.5;padding:1px 8px;border-radius:999px;border:1px solid var(--b2);color:var(--sl);}
+.ss-st.ok{color:#4ade80;border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.08);}
+.ss-st.info{color:#93c5fd;border-color:rgba(96,165,250,.45);background:rgba(96,165,250,.08);}
+.ss-st.warn{color:#fbbf24;border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.08);}
+.ss-st.bad{color:#fca5a5;border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.08);}
+.ss-st.none{color:var(--gr);}
+.ss-hint,.ss-load,.ss-empty{font-family:'Mulish',sans-serif;font-size:12.5px;color:var(--sl);line-height:1.6;padding:10px 8px;}
+.ss-empty-t{font-family:'Poppins',sans-serif;font-size:14px;font-weight:700;color:var(--wh);margin-bottom:4px;}
+.ss-spin{display:inline-block;width:12px;height:12px;border:2px solid var(--b2);border-top-color:var(--or);border-radius:50%;animation:ss-rot .8s linear infinite;vertical-align:-2px;margin-right:6px;}
+@keyframes ss-rot{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.ss-spin{animation:none;}}
+.ss-foot{font-family:'Mulish',sans-serif;font-size:10.5px;color:var(--gr);padding:8px 8px 2px;border-top:1px solid var(--b1);margin-top:6px;}
+.ss-link{background:none;border:none;color:var(--sl);cursor:pointer;font-family:'Mulish',sans-serif;font-size:11.5px;text-decoration:underline dotted;text-underline-offset:3px;padding:0;}
+.ss-link:hover,.ss-link:focus-visible{color:var(--or);}
+.ss-card{padding:6px 6px 2px;}
+.ss-card-top{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:6px;}
+.ss-found{font-family:'Mulish',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--or);}
+.ss-card-h{padding-bottom:10px;border-bottom:1px solid var(--b1);margin-bottom:10px;}
+.ss-dl{display:grid;grid-template-columns:max-content 1fr;gap:7px 14px;font-family:'Mulish',sans-serif;font-size:12.5px;}
+.ss-dl dt{color:var(--gr);}
+.ss-dl dd{color:var(--wh);min-width:0;word-break:break-word;}
+.ss-dim{color:var(--gr);font-size:11px;}
+.ss-small{margin-top:6px;}
+.ss-note{margin-top:10px;padding:8px 10px;border-radius:7px;font-family:'Mulish',sans-serif;font-size:12px;line-height:1.5;}
+.ss-note.critical{border:1px solid rgba(239,68,68,.5);background:rgba(239,68,68,.08);color:#fca5a5;}
+.ss-note.warning{border:1px solid rgba(251,191,36,.45);background:rgba(251,191,36,.07);color:#fcd34d;}
+.ss-fnote{margin-top:10px;padding:7px 10px;border:1px dashed var(--b2);border-radius:7px;font-family:'Mulish',sans-serif;font-size:11.5px;color:var(--sl);}
+.ss-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.ss-btn{background:#141414;border:1px solid var(--b2);color:var(--sl);border-radius:6px;padding:6px 12px;cursor:pointer;font-family:'Poppins',sans-serif;font-size:12px;}
+.ss-btn:hover,.ss-btn:focus-visible{border-color:var(--or);color:var(--or);}
+@media(max-width:900px){.ss{order:9;flex-basis:100%;max-width:none;}.ss-panel{width:100%;}}
+@media(max-width:600px){.ss-kbd{display:none;}.ss-dl{grid-template-columns:1fr;gap:2px;}.ss-dl dd{margin-bottom:6px;}.ss-why{display:none;}}
+
 @media(max-width:1200px){.stats-row{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:900px){.stats-row{grid-template-columns:repeat(3,1fr);}.dg-ribbon{grid-template-columns:1fr 1fr;}.upload-slots{grid-template-columns:1fr;}}
 @media(max-width:600px){.stats-row{grid-template-columns:1fr 1fr;}.container{padding:12px;}}
@@ -337,6 +641,12 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 <script src="js/guards.js"></script>
 <script src="js/session-timeout.js"></script>
 <script src="js/export-utils.js"></script>
+<script src="js/providers/registry.js"></script>
+<script src="js/providers/vi.js"></script>
+<script src="js/providers/cloud.js"></script>
+<script src="js/providers/ui.js"></script>
+<script src="js/providers/vi-ui.js"></script>
+<script src="js/providers/search.js"></script>
 </head>
 <body>
 
@@ -348,6 +658,13 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
   <div class="m-title">Upload Data Files</div>
   <div class="m-sub">Update dashboard with new CSV data — single month or multi-month trend analysis</div>
 
+  <div class="up-prov-row">
+    <span class="gf-label">📡 Provider</span>
+    <select class="gf-select" id="up-provider" onchange="ProvidersUI.setUploadProvider(this.value)"><option value="airtel">Airtel</option></select>
+    <span class="up-prov-hint" id="up-prov-hint"></span>
+  </div>
+
+  <div id="legacy-upload-ui">
   <div class="mode-toggle">
     <button class="mode-btn active" id="mode-single" onclick="setUploadMode('single')">📄 Single Month</button>
     <button class="mode-btn" id="mode-multi" onclick="setUploadMode('multi')">📊 Multi-Month Trend (up to 8)</button>
@@ -454,13 +771,22 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
       <input type="date" id="rt-snapshot-date-input" class="fsel" style="padding:8px 12px;font-family:'Roboto',monospace;color-scheme:dark">
     </div>
   </div>
+  </div><!-- /legacy-upload-ui -->
+
+  <!-- Upload forms of registry-driven providers are mounted here by their own UI module (e.g. js/providers/vi-ui.js) -->
+  <div id="provider-upload-forms"></div>
+
+  <!-- Provider without an upload format yet (e.g. Jio) -->
+  <div id="prov-na-ui" style="display:none">
+    <div class="info-box">Uploads for <b id="prov-na-name">this provider</b> are not configured yet. The provider is registered, so its parser and calculation rules can be added without changing the dashboard.</div>
+  </div>
 
   <div class="proc-bar" id="proc-bar" style="display:none">
     <div class="proc-status" id="proc-status">Processing…</div>
     <div class="proc-track"><div class="proc-fill" id="proc-fill"></div></div>
   </div>
   <div class="modal-actions">
-    <button class="btn-g" onclick="resetToBuiltin()">↩ Reset to Built-in</button>
+    <button class="btn-g" id="reset-builtin-btn" onclick="resetToBuiltin()">↩ Reset to Built-in</button>
     <button class="btn-g" onclick="closeModal()">Cancel</button>
     <button class="btn-p" id="proc-btn" onclick="processUpload()" disabled>⚡ Process & Update</button>
   </div>
@@ -469,7 +795,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 
 <!-- ── CLOUD SYNC MODAL ──────────────────────────────────────────────── -->
 <div class="overlay" id="cloud-modal" onclick="if(event.target.id==='cloud-modal')closeCloudModal()">
-<div class="modal" style="max-width:780px">
+<div class="modal" style="max-width:min(780px,96vw)">
   <button class="modal-x" onclick="closeCloudModal()">✕</button>
   <div class="eyebrow">drivebuddyAI · Cloud Sync</div>
   <div class="m-title">☁️ Saved Monthly Data</div>
@@ -535,6 +861,8 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
   </div>
   <div class="hdr-div"></div>
   <div class="hdr-title">SIM Data Dashboard</div>
+  <div class="ss" id="sim-search" role="search" aria-label="Universal SIM search"></div>
+  <div class="prov-bar" id="prov-bar" role="group" aria-label="Telecom provider"></div>
   <div class="hdr-right">
     <span class="data-badge db-builtin" id="data-badge">● Built-in Data</span>
     <span id="viewer-badge" style="display:none;font-family:'Mulish',sans-serif;font-size:11px;padding:3px 9px;border-radius:4px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.25)">👁 View Only</span>
@@ -556,6 +884,8 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
   <div class="sc s3" style="cursor:pointer;transition:background .15s" onmouseover="this.style.background='#1a1a1a'" onmouseout="this.style.background=''" onclick="cardFilter('CRITICAL','Showing vehicles at 90–100% usage (Critical)')" title="Click to see vehicles near exhaustion (90–100%)"><div class="sc-ey">🔴 Critical ≥90%</div><div class="sc-val" id="st-crit">—</div><div class="sc-hint">Near exhaustion · click to view ↗</div></div>
   <div class="sc s4" style="cursor:pointer;transition:background .15s" onmouseover="this.style.background='#1a1a1a'" onmouseout="this.style.background=''" onclick="cardFilter('EXCEEDED','Showing vehicles over 100% usage (Exceeded)')" title="Click to see vehicles that exceeded their plan (100%+)"><div class="sc-ey">💥 Exceeded 100%</div><div class="sc-val" id="st-exc">—</div><div class="sc-hint">Plan exhausted · click to view ↗</div></div>
 </div>
+<!-- shared data pool of each pooled provider in view (filled by providers/ui.js) -->
+<div id="pool-strip" style="display:none"></div>
 
 <!-- GLOBAL FILTERS -->
 <div class="global-filters">
@@ -570,6 +900,9 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
     <option value="Safe Custody">Safe Custody</option>
     <option value="DISCONNECTED">Disconnected</option>
   </select>
+  <select class="gf-select" id="gf-month" onchange="Providers.selectMonth(this.value)" style="display:none" title="Billing period shown on the vehicle, plan, price and pool tabs">
+    <option value="latest">Latest period</option>
+  </select>
   <div class="active-filter-badge" id="active-filter-badge">
     <span id="active-filter-text"></span>
     <span style="cursor:pointer;margin-left:2px" onclick="clearGlobalFilters()">✕</span>
@@ -578,6 +911,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 </div>
 
 <!-- TABS -->
+<div class="tabs-row">
 <div class="tabs">
   <button class="tab active" onclick="showTab('vehicles',this)">🚛 Vehicle Wise</button>
   <button class="tab" onclick="showTab('exceeded',this)">🚨 Exceeded</button>
@@ -586,6 +920,11 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
   <button class="tab" onclick="showTab('trends',this)">📈 Trends <span class="tab-badge" id="tr-badge" style="background:#60a5fa;color:#000">0</span></button>
   <button class="tab" onclick="showTab('price',this)">💰 Price Analysis</button>
   <button class="tab" onclick="showTab('realtime',this)">⚡ Real-time Usage <span class="tab-badge" id="rt-badge" style="background:#4ade80;color:#000">0</span></button>
+  <button class="tab" onclick="showTab('providers',this)">🌐 Providers</button>
+  <button class="tab" onclick="showTab('pool',this)">💧 Data Pool</button>
+  <button class="tab" onclick="showTab('uploads',this)">📥 Uploads</button>
+</div>
+<span class="prov-chip" id="prov-chip" aria-live="polite"></span>
 </div>
 
 <!-- VEHICLE PANEL -->
@@ -712,6 +1051,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 
   <!-- Summary ribbon -->
   <div class="dg-ribbon" id="pr-ribbon"></div>
+  <div class="pv-note" id="pr-pool-note" style="display:none"></div>
 
   <!-- Plan rate cards -->
   <div style="margin-bottom:16px">
@@ -748,10 +1088,13 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
       <div class="sec-ey">SIM Portal Live Data</div>
       <div class="sec-title">Real-time Data Allocation &amp; Usage</div>
       <div id="rt-snapshot-info" style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr);margin-top:4px;display:none">📅 Snapshot: <span id="rt-snapshot-date">—</span></div>
+      <div id="rt-prov-info" style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr);margin-top:4px;display:none"></div>
     </div>
     <select class="fsel" id="rt-snapshot-sel" onchange="rtLoadSnapshot(this.value)" style="display:none" title="Select snapshot date">
       <option value="">Loading…</option>
     </select>
+    <!-- date pickers of registry-driven providers (e.g. VI "as of" day), filled by providers/ui.js -->
+    <span id="rt-prov-ctrl" style="display:none"></span>
     <input class="srch" id="rt-srch" placeholder="Search SIM / plan / reg…" oninput="filterRT()">
     <select class="fsel" id="rt-flag" onchange="filterRT()">
       <option value="">All Status</option>
@@ -761,6 +1104,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
       <option value="MODERATE">🔵 Moderate ≥50%</option>
       <option value="OK">✅ OK</option>
       <option value="WASTED">⚪ Wasted &lt;5%</option>
+      <option value="NO DATA">— No plan / not active</option>
     </select>
     <select class="fsel" id="rt-plan" onchange="filterRT()"><option value="">All Plans</option></select>
     <select class="fsel" id="rt-sort" onchange="filterRT()">
@@ -779,7 +1123,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
   <div id="rt-no-data" style="text-align:center;padding:48px 24px;background:var(--dc);border:1px dashed var(--b2);border-radius:12px;">
     <div style="font-size:38px;margin-bottom:12px">⚡</div>
     <div style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;color:var(--wh);margin-bottom:6px">Real-time Data Not Loaded</div>
-    <div style="font-family:'Poppins',sans-serif;font-size:12px;color:var(--gr);margin-bottom:20px;max-width:500px;margin-left:auto;margin-right:auto">Upload the BULK_DATA_USAGE Excel from your SIM portal to see live allocated vs used vs available data for every SIM.</div>
+    <div id="rt-no-data-text" style="font-family:'Poppins',sans-serif;font-size:12px;color:var(--gr);margin-bottom:20px;max-width:500px;margin-left:auto;margin-right:auto">Upload the BULK_DATA_USAGE Excel from your SIM portal to see live allocated vs used vs available data for every SIM.</div>
     <button class="or-btn editor-only" style="margin:0 auto" onclick="openModal();setUploadMode('realtime')">📡 Upload Real-time Data</button>
   </div>
 
@@ -812,6 +1156,24 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
   <div class="pag" id="rt-pag"></div>
 </div>
 
+<!-- PROVIDERS PANEL (comparison) -->
+<div id="panel-providers" class="panel">
+  <div class="sec-hdr"><div><div class="sec-ey">Multi-Provider</div><div class="sec-title">Provider Comparison</div></div></div>
+  <div id="pc-body"></div>
+</div>
+
+<!-- DATA POOL PANEL -->
+<div id="panel-pool" class="panel">
+  <div class="sec-hdr"><div><div class="sec-ey">Allocation</div><div class="sec-title">Data Pool &amp; Allocation Analysis</div></div></div>
+  <div id="pool-body"></div>
+</div>
+
+<!-- UPLOADS PANEL (history + reconciliation) -->
+<div id="panel-uploads" class="panel">
+  <div class="sec-hdr"><div><div class="sec-ey">Data Sources</div><div class="sec-title">Upload History &amp; Reconciliation</div></div></div>
+  <div id="up-body"></div>
+</div>
+
 </div><!-- /container -->
 
 <div class="footer"><span>drivebuddy</span>ai — a <span>roadzen</span> company &nbsp;·&nbsp; SIM Data Dashboard &nbsp;·&nbsp; ADAMATICS Fleet Safety Platform</div>
@@ -841,7 +1203,24 @@ function init(){
   loadData(BUILTIN, false);
 }
 
+// Every legacy (Airtel) dataset — built-in, uploads, cloud loads — enters here. It is stored as the
+// Airtel dataset and the provider selection decides what is rendered (applyProviderView).
 function loadData(data, uploaded){
+  if(uploaded)flushAirtelUploadHistory();   // an Airtel upload finished → record it in the history
+  if(window.Providers){ Providers.ingestAirtel(data, uploaded, trData); return; }
+  renderDataset(data, uploaded);
+}
+// Called by Providers.refresh() with the dataset for the current provider selection.
+// With only Airtel data in view, `view.CD` is the very object loadData() received.
+function applyProviderView(view){
+  if(window.ProvidersUI)ProvidersUI.beforeRender(view);
+  trData=view.trData;
+  rtRows=view.rtRows;
+  renderDataset(view.CD, view.uploaded);
+  renderRT();
+}
+// The original loadData() body — unchanged rendering of one dataset
+function renderDataset(data, uploaded){
   CD=data;
   // Client filter dropdown
   const clients = data.clients || [...new Set(data.vehicles.map(v=>v.client).filter(c=>c&&c!=='nan'))].sort();
@@ -871,7 +1250,7 @@ function loadData(data, uploaded){
   // Badge
   const badge=document.getElementById('data-badge');
   if(!uploaded){badge.className='data-badge db-builtin';badge.textContent='● Built-in Data';}
-  else if(trData.length>0){badge.className='data-badge db-multi';badge.textContent=`● ${trData.length}-Month Data`;}
+  else if(trData.length>0){badge.className='data-badge db-multi';badge.textContent=`● ${new Set(trData.flatMap(v=>(v.months||[]).map(m=>m.label))).size}-Month Data`;}
   else{badge.className='data-badge db-uploaded';badge.textContent='● Uploaded Data';}
   applyGlobalFilters();
   renderExc(); renderPlans(); computeDG(); renderDGRibbon(); computePrice();
@@ -892,6 +1271,7 @@ function applyGlobalFilters(){
   if(typeof filterRT==='function'&&rtRows.length)filterRT();
   // Re-render exceeded and plans with global filter applied
   renderExc(); renderPlans(); renderDGRibbon(); renderPriceRibbon();
+  if(window.ProvidersUI)ProvidersUI.renderPanels();
 }
 function clearGlobalFilters(){
   document.getElementById('gf-client').value='';
@@ -911,7 +1291,10 @@ function getFlag(pct){if(pct>=100)return'EXCEEDED';if(pct>=90)return'CRITICAL';i
 function barColor(pct){if(pct>=100)return'#dc2626';if(pct>=90)return'#ef4444';if(pct>=75)return'#FF7B00';if(pct>=50)return'#60a5fa';if(pct>0)return'#22c55e';return'#2a2a2a';}
 function dotCls(f){{return{EXCEEDED:'dr',CRITICAL:'do',WARNING:'da',MODERATE:'db',OK:'dg','NO DATA':'dx',WASTED:'dx'}[f]||'dx';}}
 function fbCls(f){return{EXCEEDED:'fb-EX',CRITICAL:'fb-CR',WARNING:'fb-WA',MODERATE:'fb-MO',OK:'fb-OK','NO DATA':'fb-ND',WASTED:'fb-WS'}[f]||'fb-ND';}
-function pShort(plan){if(!plan)return'—';const m=plan.match(/(\d+GB)/);return m?m[1]+' Plan':plan.substring(0,18);}
+function pShort(plan){if(!plan)return'—';const lbl=window.Providers&&Providers.planLabel(plan);if(lbl)return lbl;const m=plan.match(/(\d+GB)/);return m?m[1]+' Plan':plan.substring(0,18);}
+// Extra search terms every table accepts: provider name, ICCID, MSISDN, IMSI
+function provHit(v,q){return !!(window.Providers&&Providers.searchHit(v,q));}
+function provBadge(v){return window.Providers?Providers.badge(v):'';}
 function scCls(pct){if(pct>=75)return'sch-hi';if(pct>=50)return'sch-md';return'sch-lo';}
 function showToast(msg,type='info'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.classList.remove('show'),3500);}
 function showTab(name,el){
@@ -935,7 +1318,7 @@ function filterV(){
   const pl=document.getElementById('v-plan').value;
   vFilt=CD.vehicles.filter(v=>{
     if(!gfMatch(v))return false;
-    if(q&&!v.reg.toLowerCase().includes(q)&&!v.client.toLowerCase().includes(q)&&!(v.hw_id||'').toLowerCase().includes(q)&&!(v.sim_no||'').includes(q))return false;
+    if(q&&!v.reg.toLowerCase().includes(q)&&!v.client.toLowerCase().includes(q)&&!(v.hw_id||'').toLowerCase().includes(q)&&!(v.sim_no||'').includes(q)&&!provHit(v,q))return false;
     if(fl==='__NOUSAGE__'){ if(!isNoUsage(v))return false; }
     else if(fl==='__HASPLAN__'){ if(!v.plan)return false; }
     else if(fl&&v.flag!==fl)return false;
@@ -950,8 +1333,11 @@ function sortV(k){if(vSK===k)vSD*=-1;else{vSK=k;vSD=-1;}filterV();}
 // ── CLICKABLE STAT CARDS ───────────────────────────────────────────────────
 function isNoUsage(v){
   const sim=(v.sim_no||'').trim();
-  return sim!==''&&sim!=='nan'&&!v.plan;
+  return sim!==''&&sim!=='nan'&&!v.plan&&!usedWithoutPlan(v);
 }
+// A provider row (VI) with usage but no plan in its SIM inventory (e.g. a Ready SIM that went live) has portal data —
+// it is not "SIM exists, no portal data". Airtel rows never match, so Airtel's counts are unchanged.
+function usedWithoutPlan(v){return !!(v&&v.provider&&v.provider!=='airtel'&&!v.plan&&v.used_mb>0);}
 // Generic: jump to Vehicle Wise tab and apply a status filter.
 //  flag values: '' = all, '__HASPLAN__', '__NOUSAGE__', or a flag like WARNING/CRITICAL/EXCEEDED
 function cardFilter(flag,msg){
@@ -977,11 +1363,12 @@ function renderVT(){
       <td><span class="rc reg-link" onclick="openVSum('${v.reg}')">${v.reg}</span></td>
       <td><span class="cc">${v.client}</span></td>
       <td><span class="hw-cell">${v.hw_id||'—'}</span></td>
-      <td style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr)">${v.sim_no&&v.sim_no!=='nan'?v.sim_no:'—'}</td>
+      <td style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr)">${provBadge(v)}${v.sim_no&&v.sim_no!=='nan'?v.sim_no:'—'}</td>
+      <td style="font-size:11px;color:var(--gr)" title="${v.plan||''}">${pShort(v.plan)}</td>
       <td class="pw"><div class="pw-wrap"><div class="pb-bg"><div class="pb" style="width:${bw}%;background:${bc}"></div></div><span class="pct-lbl" style="color:${bc}">${exc}${pct.toFixed(1)}%</span></div></td>
       <td style="font-family:'Roboto',monospace;font-size:11px;color:var(--sl)">${v.used_mb>0?(v.used_mb/1024).toFixed(2)+' GB':'—'}</td>
       <td style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr)">${v.plan_mb>0?(v.plan_mb/1024).toFixed(0)+' GB':'—'}</td>
-      <td><span class="sp ${sc}">${v.sim_status}</span></td>
+      <td><span class="sp ${sc}">${v.sim_state||v.sim_status}</span></td>
       <td><span class="fb ${fbCls(v.flag)}"><span class="dot ${dotCls(v.flag)}"></span>${v.flag}</span></td>
     </tr>`;
   }).join('');
@@ -994,15 +1381,16 @@ function computePrice(){
   prRows=[];
   CD.vehicles.forEach(v=>{
     if(!v.plan||!v.plan_gb)return;
-    const price=extractPrice(v.plan);if(!price)return;
+    const price=window.Providers?Providers.priceFor(v):extractPrice(v.plan);if(!price)return;
     const cpp=Math.round(price/v.plan_gb*100)/100;
     const used_gb=v.used_gb||0;
     const cpu=used_gb>0?Math.round(price/used_gb*100)/100:null;
     const unused_gb=Math.max(0,v.plan_gb-used_gb);
     const wastage=Math.round(unused_gb/v.plan_gb*price*100)/100;
     prRows.push({reg:v.reg,client:v.client,hw_id:v.hw_id,sim_no:v.sim_no,
+      provider:v.provider,pooled:v.pooled,iccid:v.iccid,msisdn:v.msisdn,
       plan:v.plan,plan_gb:v.plan_gb,used_gb,usage_pct:v.usage_pct,
-      sim_status:v.sim_status,flag:v.flag,
+      sim_status:v.sim_status,sim_state:v.sim_state,flag:v.flag,
       monthly_cost:price,cost_per_gb_plan:cpp,cost_per_gb_used:cpu,
       wastage_cost:wastage,unused_gb:Math.round(unused_gb*100)/100});
   });
@@ -1012,9 +1400,12 @@ function computePrice(){
   renderPriceRates();renderPriceRibbon();filterPrice();
 }
 function renderPriceRates(){
-  document.getElementById('pr-rate-grid').innerHTML=Object.entries(PLAN_PRICES).sort((a,b)=>a[0]-b[0]).map(([gb,price])=>{
-    const ppg=Math.round(price/gb*100)/100;
-    return`<div class="pr-rate-card"><div class="pr-rate-plan">${gb}GB Plan</div><div class="pr-rate-val">₹${price}<span style="font-size:11px;font-weight:400;color:var(--gr)">/mo</span></div><div class="pr-rate-sub">₹${ppg}/GB rate</div></div>`;
+  // Rate cards of the providers in view (Airtel: PLAN_PRICES exactly as before)
+  const rates=window.Providers?Providers.rates():Object.entries(PLAN_PRICES).map(([gb,price])=>({gb:+gb,price,label:gb+'GB Plan'}));
+  const multi=window.Providers&&Providers.isMulti();
+  document.getElementById('pr-rate-grid').innerHTML=rates.sort((a,b)=>(a.provider||'').localeCompare(b.provider||'')||a.gb-b.gb).map(r=>{
+    const ppg=Math.round(r.price/r.gb*100)/100;
+    return`<div class="pr-rate-card"><div class="pr-rate-plan">${multi?provBadge(r):''}${r.label}</div><div class="pr-rate-val">₹${r.price}<span style="font-size:11px;font-weight:400;color:var(--gr)">/mo</span></div><div class="pr-rate-sub">₹${ppg}/GB rate</div></div>`;
   }).join('');
 }
 function renderPriceRibbon(){
@@ -1037,7 +1428,7 @@ function filterPrice(){
   prSK=document.getElementById('pr-sort').value||'wastage_cost';
   prFilt=prRows.filter(r=>{
     if(!gfMatch(r))return false;
-    if(q&&!r.reg.toLowerCase().includes(q)&&!r.client.toLowerCase().includes(q)&&!(r.hw_id||'').toLowerCase().includes(q))return false;
+    if(q&&!r.reg.toLowerCase().includes(q)&&!r.client.toLowerCase().includes(q)&&!(r.hw_id||'').toLowerCase().includes(q)&&!provHit(r,q))return false;
     if(pl&&r.plan!==pl)return false;
     return true;
   });
@@ -1062,22 +1453,28 @@ function renderPriceTable(){
       <td><span class="rc reg-link" onclick="openVSum('${r.reg}')">${r.reg}</span></td>
       <td><span class="cc">${r.client}</span></td>
       <td><span class="hw-cell">${r.hw_id||'—'}</span></td>
-      <td style="font-size:11px;color:var(--gr)">${pShort(r.plan)}</td>
+      <td style="font-size:11px;color:var(--gr)">${provBadge(r)}${pShort(r.plan)}</td>
       <td style="font-family:'Roboto',monospace;font-size:12px;font-weight:600;color:var(--sl)">${r.used_gb} GB</td>
       <td class="pw"><div class="pw-wrap"><div class="pb-bg"><div class="pb" style="width:${bw}%;background:${bc}"></div></div><span class="pct-lbl" style="color:${bc}">${r.usage_pct.toFixed(1)}%</span></div></td>
       <td style="font-family:'Poppins',sans-serif;font-size:12px;font-weight:700;color:var(--wh)">₹${r.monthly_cost}</td>
       <td style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr)">₹${r.cost_per_gb_plan}/GB</td>
       <td style="font-family:'Roboto',monospace;font-size:11px;color:${r.cost_per_gb_used?'#f87171':'var(--gr)'}">${r.cost_per_gb_used?'₹'+r.cost_per_gb_used+'/GB':'—'}</td>
       <td><span class="wastage-chip ${wcls}">₹${r.wastage_cost} <span style="opacity:.7;font-size:10px">(${wPct}%)</span></span></td>
-      <td><span class="sp ${sc}">${r.sim_status}</span></td>
+      <td><span class="sp ${sc}">${r.sim_state||r.sim_status}</span></td>
     </tr>`;
   }).join('');
 }
+// Exports follow the provider view: rows are the filtered view; combined views get a Provider column
+function provExport(base,fmt,headers,list,mapRow,simIdx){
+  const x=window.Providers?Providers.exportPack(headers,list,mapRow,simIdx):{headers,rows:list.map(mapRow),sim:simIdx};
+  const ext=fmt==='csv'?'csv':'xlsx';
+  const name=window.Providers?Providers.exportName(base,ext):base+'.'+ext;
+  if(fmt==='csv') ExportUtils.csv(name,x.headers,x.rows,x.sim);
+  else            ExportUtils.xlsx(name,x.headers,x.rows,x.sim);
+}
 function exportPrice(fmt){
   const headers=['Reg No','Client','HW ID','Plan','Used (GB)','Usage %','Monthly Cost (INR)','Rate per GB Plan','Effective Rate per GB','Wastage Cost (INR)','Wastage %','SIM Status'];
-  const rows=prFilt.map(r=>[r.reg,r.client,r.hw_id||'',r.plan,r.used_gb,r.usage_pct,r.monthly_cost,r.cost_per_gb_plan,r.cost_per_gb_used||'',r.wastage_cost,Math.round(r.wastage_cost/r.monthly_cost*100),r.sim_status]);
-  if(fmt==='csv') ExportUtils.csv('drivebuddyai_price_analysis.csv',headers,rows,[]);
-  else            ExportUtils.xlsx('drivebuddyai_price_analysis.xlsx',headers,rows,[]);
+  provExport('drivebuddyai_price_analysis',fmt,headers,prFilt,r=>[r.reg,r.client,r.hw_id||'',r.plan,r.used_gb,r.usage_pct,r.monthly_cost,r.cost_per_gb_plan,r.cost_per_gb_used||'',r.wastage_cost,Math.round(r.wastage_cost/r.monthly_cost*100),r.sim_state||r.sim_status],[]);
 }
 // ── REAL-TIME PORTAL DATA ─────────────────────────────────────────────────
 let rtRows=[],rtFilt=[],rtPage=1,rtSK='used_pct';
@@ -1154,6 +1551,8 @@ function rtFinalize(rows){
     // Floor, not round: 99.96% must read 99.9% (CRITICAL), not 100.0% (EXCEEDED)
     const p=r.alloc_mb>0?r.used_mb/r.alloc_mb*100:0;
     r.used_pct=Math.floor(p*10+1e-9)/10;
+    // No allocation: provider rule (Airtel keeps its legacy WASTED; VI Ready SIMs are inventory → NO DATA)
+    if(r.alloc_mb<=0){r.flag=window.Providers?Providers.zeroAllocFlag(r.provider):'WASTED';return;}
     r.flag=r.used_pct>=100?'EXCEEDED':r.used_pct>=90?'CRITICAL':r.used_pct>=75?'WARNING':r.used_pct>=50?'MODERATE':r.used_pct>=5?'OK':'WASTED';
   });
   if(skippedSample.length)console.log('[realtime] Skipped non-SIM rows, e.g.:',skippedSample);
@@ -1185,6 +1584,10 @@ function processRealtime(){
       if(sim&&sim!=='nan'){simToVeh[sim]={reg:String(r[vcm.regCol]||'').trim(),client:String(r[vcm.clientCol]||'').trim(),hw_id:String(r[vcm.hwCol]||'').trim()};}
     });
     vehSource='Uploaded vehicle file';
+  }else if(window.Providers&&Providers.fleet().length){
+    // The fleet (vehicle master) is provider-independent — not whatever provider view is on screen
+    Providers.fleet().forEach(v=>{if(v.sim)simToVeh[v.sim]={reg:v.reg,client:v.client,hw_id:v.hw_id};});
+    vehSource='Vehicle master (fleet)';
   }else if(CD&&CD.vehicles){
     CD.vehicles.forEach(v=>{if(v.sim_no)simToVeh[v.sim_no]={reg:v.reg,client:v.client,hw_id:v.hw_id};});
     vehSource='Current dashboard vehicles';
@@ -1204,7 +1607,7 @@ function processRealtime(){
     const avail_mb=cols.avail?rtNum(r[cols.avail]):Math.max(0,alloc_mb-used_mb);
     const plan=String(r[cols.plan]||'').trim();
     const veh=simToVeh[sim]||{};
-    raw.push({
+    const row={
       sim_no:sim,
       reg:veh.reg||'—',
       client:veh.client||'—',
@@ -1212,12 +1615,16 @@ function processRealtime(){
       plan,plan_gb:extractGB(plan),
       alloc_mb,used_mb,avail_mb,
       sim_status:'Active', // real-time data implies SIM is active
-    });
+    };
+    // The portal's mobile number, as given (the universal SIM search finds a SIM by it)
+    if(cols.mobile){const m=String(r[cols.mobile]??'').trim();if(m&&m!=='nan')row.msisdn=m;}
+    raw.push(row);
   });
   const fin=rtFinalize(raw);
-  rtRows=fin.rows;
-  const unmatched=rtRows.filter(r=>r.reg==='—').length;
-  console.log('[realtime] File rows:',raw.length,'→ unique SIMs:',rtRows.length,'| Unmatched to vehicles:',unmatched,'| Clean-up:',fin.stats);
+  const airtelRt=fin.rows;   // Airtel's own rows — the on-screen rtRows may be a multi-provider view
+  rtRows=airtelRt;
+  const unmatched=airtelRt.filter(r=>r.reg==='—').length;
+  console.log('[realtime] File rows:',raw.length,'→ unique SIMs:',airtelRt.length,'| Unmatched to vehicles:',unmatched,'| Clean-up:',fin.stats);
   if(fin.stats.sci)console.warn('[realtime]',fin.stats.sci,'SIM numbers are in scientific notation in the source file — Excel stored them as numbers, so their last digits are already lost. Export the SIM column as Text from the portal.');
   const notes=[];
   if(fin.stats.dupDropped+fin.stats.merged)notes.push(`${fin.stats.dupDropped+fin.stats.merged} repeated SIM row(s) merged`);
@@ -1234,9 +1641,11 @@ function processRealtime(){
       const d=new Date(dateInput.value);
       document.getElementById('rt-snapshot-date').textContent=d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
     }
-    renderRT();        // Render the data first
+    flushAirtelUploadHistory();
+    if(window.Providers)Providers.ingestAirtelRt(airtelRt); // store as Airtel data + render the provider view
+    else renderRT();   // Render the data first
     showTab('realtime'); // Then switch to the tab (which also calls renderRT)
-    showToast(`✅ ${rtRows.length} SIMs loaded · ${rtRows.length-unmatched} matched to vehicles${notes.length?' · '+notes.join(' · '):''}`,'success');
+    showToast(`✅ ${airtelRt.length} SIMs loaded · ${airtelRt.length-unmatched} matched to vehicles${notes.length?' · '+notes.join(' · '):''}`,'success');
     // Auto-push to cloud if we're in edit mode and Supabase is ready
     if(EDIT_MODE&&sb){
       console.log('[realtime] Auto-syncing to cloud after upload…');
@@ -1253,6 +1662,10 @@ function renderRT(){
     document.getElementById('rt-plan-summary').style.display='none';
     document.getElementById('rt-table-wrap').style.display='none';
     document.getElementById('rt-badge').textContent='0';
+    // a provider view without real-time data must not keep the previous view's count, pages or plans
+    document.getElementById('rt-count').textContent='—';
+    document.getElementById('rt-pag').innerHTML='';
+    document.getElementById('rt-plan').innerHTML='<option value="">All Plans</option>';
     return;
   }
   document.getElementById('rt-no-data').style.display='none';
@@ -1280,7 +1693,7 @@ function filterRT(){
   rtFilt=rtRows.filter(r=>{
     // Global filter — client and SIM status
     if(!gfMatch(r))return false;
-    if(q&&!(r.reg||'').toLowerCase().includes(q)&&!(r.client||'').toLowerCase().includes(q)&&!(r.sim_no||'').includes(q)&&!(r.plan||'').toLowerCase().includes(q))return false;
+    if(q&&!(r.reg||'').toLowerCase().includes(q)&&!(r.client||'').toLowerCase().includes(q)&&!(r.sim_no||'').includes(q)&&!(r.plan||'').toLowerCase().includes(q)&&!provHit(r,q))return false;
     if(pl&&r.plan!==pl)return false;
     if(fl&&r.flag!==fl)return false;
     return true;
@@ -1319,9 +1732,12 @@ function renderRTRibbon(){
   const usedPct=totalAlloc>0?Math.round(totalUsed/totalAlloc*1000)/10:0;
   const availPct=totalAlloc>0?Math.round(totalAvail/totalAlloc*1000)/10:0;
   const wastedSims=rows.filter(r=>r.flag==='WASTED').length;
+  // A provider shown as of an earlier day (VI day picker): say so; Airtel always reads "Current cycle"
+  const asOf=window.Providers&&Providers.rtAsOf?Providers.rtAsOf():null;
+  const cycleLbl=asOf?'As of the end of '+new Date(asOf+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'Current cycle';
   document.getElementById('rt-ribbon').innerHTML=`
     <div class="dgr orange"><div class="dgr-lbl">Total SIMs</div><div class="dgr-val">${totalSims.toLocaleString()}</div><div class="dgr-sub">${mapped.toLocaleString()} mapped to vehicles · ${(totalSims-mapped).toLocaleString()} unmapped</div></div>
-    <div class="dgr"><div class="dgr-lbl">Total Allocated</div><div class="dgr-val">${Math.round(totalAlloc/1024).toLocaleString()} GB</div><div class="dgr-sub">Current cycle${planGb?` · plan sizes add up to ${planGb.toLocaleString()} GB`:''}</div></div>
+    <div class="dgr"><div class="dgr-lbl">Total Allocated</div><div class="dgr-val">${Math.round(totalAlloc/1024).toLocaleString()} GB</div><div class="dgr-sub">${cycleLbl}${planGb&&!asOf?` · plan sizes add up to ${planGb.toLocaleString()} GB`:''}</div></div>
     <div class="dgr"><div class="dgr-lbl">Total Used</div><div class="dgr-val" style="color:#4ade80">${Math.round(totalUsed/1024).toLocaleString()} GB</div><div class="dgr-sub">${usedPct}% of allocated</div></div>
     <div class="dgr" style="border-color:rgba(239,68,68,.3)"><div class="dgr-lbl">Available (Unused)</div><div class="dgr-val" style="color:#ef4444">${Math.round(totalAvail/1024).toLocaleString()} GB</div><div class="dgr-sub">${availPct}% remaining · ${wastedSims.toLocaleString()} SIMs &lt;5% used</div></div>`;
 }
@@ -1342,6 +1758,8 @@ function renderRTStatusChips(){
   ];
   // Count from rows that pass the GLOBAL (client/sim) filter, ignoring the status filter itself
   const base=rtRows.filter(r=>gfMatch(r));
+  // SIMs without an allocation (e.g. VI Ready stock) get their own chip — only when there are any
+  if(base.some(r=>r.flag==='NO DATA'))defs.push({flag:'NO DATA',label:'— No plan',cls:''});
   el.innerHTML=defs.map(d=>{
     const n=d.flag===''?base.length:base.filter(r=>r.flag===d.flag).length;
     const active=cur===d.flag;
@@ -1408,7 +1826,7 @@ function renderRTTable(){
     return `<tr>
       <td>${r.reg!=='—'?`<span class="rc reg-link" onclick="openVSum('${r.reg}')">${r.reg}</span>`:'<span class="rc" style="color:var(--gr)">—</span>'}</td>
       <td><span class="cc">${r.client}</span></td>
-      <td style="font-family:'Roboto',monospace;font-size:10px;color:var(--gr)">${r.sim_no}</td>
+      <td style="font-family:'Roboto',monospace;font-size:10px;color:var(--gr)">${provBadge(r)}${r.sim_no}</td>
       <td style="font-size:11px;color:var(--gr)" title="${r.plan}">${pShort(r.plan)}</td>
       <td style="font-family:'Roboto',monospace;font-size:12px;font-weight:600;color:var(--or)">${r.alloc_gb} GB</td>
       <td style="font-family:'Roboto',monospace;font-size:12px;font-weight:600;color:${bc}">${r.used_gb} GB</td>
@@ -1421,18 +1839,14 @@ function renderRTTable(){
 
 function exportRT(fmt){
   const headers=['Reg No','Client','SIM No','Plan','Allocated (GB)','Used (GB)','Available (GB)','Usage %','Status'];
-  const rows=rtFilt.map(r=>[r.reg,r.client,String(r.sim_no||''),r.plan,r.alloc_gb,r.used_gb,r.avail_gb,r.used_pct,r.flag]);
-  const SIM=[2];
-  if(fmt==='csv') ExportUtils.csv('drivebuddyai_realtime.csv',headers,rows,SIM);
-  else            ExportUtils.xlsx('drivebuddyai_realtime.xlsx',headers,rows,SIM);
+  // A provider shown "as of" an earlier day (VI) puts that day in the file name; Airtel adds nothing
+  const tag=window.Providers&&Providers.rtExportTag?Providers.rtExportTag():'';
+  provExport('drivebuddyai_realtime'+tag,fmt,headers,rtFilt,r=>[r.reg,r.client,String(r.sim_no||''),r.plan,r.alloc_gb,r.used_gb,r.avail_gb,r.used_pct,r.flag],[2]);
 }
 
 function exportV(fmt){
   const headers=['Reg No','Client','HW ID','SIM No','Plan','Usage %','Used (GB)','Plan (GB)','SIM Status','Flag'];
-  const rows=vFilt.map(v=>[v.reg,v.client,v.hw_id||'',String(v.sim_no||''),v.plan,v.usage_pct,v.used_gb,v.plan_gb,v.sim_status,v.flag]);
-  const SIM=[3];
-  if(fmt==='csv') ExportUtils.csv('drivebuddyai_vehicles.csv',headers,rows,SIM);
-  else            ExportUtils.xlsx('drivebuddyai_vehicles.xlsx',headers,rows,SIM);
+  provExport('drivebuddyai_vehicles',fmt,headers,vFilt,v=>[v.reg,v.client,v.hw_id||'',String(v.sim_no||''),v.plan,v.usage_pct,v.used_gb,v.plan_gb,v.sim_state||v.sim_status,v.flag],[3]);
 }
 
 // ── EXCEEDED ───────────────────────────────────────────────────────────────
@@ -1441,8 +1855,9 @@ function renderExc(){
   document.getElementById('exc-grid').innerHTML=exc.length?exc.map(v=>`
     <div class="exc-card" onclick="openVSum('${v.reg}')" style="cursor:pointer">
       <div class="exc-reg">🚨 ${v.reg} <span style="font-size:10px;color:rgba(255,123,0,.6);font-weight:400">↗ click</span></div>
-      <div class="exc-client">${v.client}</div>
+      <div class="exc-client">${provBadge(v)}${v.client}</div>
       <div class="exc-plan">${v.plan}</div>
+      ${window.ProvidersUI?ProvidersUI.excNote(v):''}
       <div style="display:flex;align-items:flex-end;justify-content:space-between">
         <div>
           <div class="exc-pct">${v.usage_pct.toFixed(1)}%</div>
@@ -1451,7 +1866,7 @@ function renderExc(){
           <div class="exc-hw">${v.hw_id||''}</div>
         </div>
         <div style="text-align:right">
-          <span class="sp sp-${v.sim_status.replace(/\s+/g,'-')}">${v.sim_status}</span>
+          <span class="sp sp-${v.sim_status.replace(/\s+/g,'-')}">${v.sim_state||v.sim_status}</span>
           <div style="font-family:'Mulish',sans-serif;font-size:10px;color:var(--gr);margin-top:4px">Plan: ${v.plan_gb}GB</div>
         </div>
       </div>
@@ -1466,7 +1881,7 @@ function renderPlans(){
   const pm={};
   filtVeh.forEach(v=>{
     if(!v.plan)return;
-    if(!pm[v.plan])pm[v.plan]={plan:v.plan,plan_gb:v.plan_gb,total:0,active:0,inactive:0,total_alloc_gb:0,total_used_mb:0,active_used_mb:0,active_used_count:0};
+    if(!pm[v.plan])pm[v.plan]={plan:v.plan,plan_gb:v.plan_gb,provider:v.provider||'airtel',pooled:!!v.pooled,total:0,active:0,inactive:0,total_alloc_gb:0,total_used_mb:0,active_used_mb:0,active_used_count:0};
     pm[v.plan].total++;
     pm[v.plan].total_alloc_gb+=v.plan_gb;
     pm[v.plan].total_used_mb+=v.used_mb||0;
@@ -1502,13 +1917,15 @@ function renderPlans(){
     const avgPct=p.plan_gb>0?Math.min(100,(aavg/p.plan_gb*100)).toFixed(1):0;
     const bc=barColor(parseFloat(avgPct));
     const needed=aavg*1.2;
-    const sug=TIERS.find(t=>t>=needed&&t<p.plan_gb);
-    const sugHtml=sug
+    // Tiers are per provider (Airtel: TIERS). A pooled plan is sized at pool level, not per SIM.
+    const tiers=window.Providers?Providers.tiers(p.provider):TIERS;
+    const sug=p.pooled?null:tiers.find(t=>t>=needed&&t<p.plan_gb);
+    const sugHtml=p.pooled&&window.ProvidersUI?ProvidersUI.planNote(p):sug
       ?`<div class="plan-sug"><div class="plan-sug-hdr"><span>💡</span><span class="plan-sug-title">Downgrade Rec.</span></div>
          <div class="plan-sug-body">Active avg <b>${aavg}GB</b> of ${p.plan_gb}GB. Move to <b class="sug-gb">${sug}GB plan</b> saves ~<b class="sug-save">${Math.round((1-sug/p.plan_gb)*100)}%</b> next month.</div></div>`
       :`<div class="plan-no-sug">${aavg>=p.plan_gb*0.75?'✅ Active SIMs using '+avgPct+'% — size appropriate.':'ℹ️ Low usage but no smaller plan tier available.'}</div>`;
     return `<div class="plan-card ${sug?'has-sug':''}">
-      <div class="plan-card-hdr"><div class="plan-name">${p.plan}</div><div class="plan-gb-pill">${p.plan_gb}GB</div></div>
+      <div class="plan-card-hdr"><div class="plan-name">${provBadge(p)}${p.plan}</div><div class="plan-gb-pill">${p.plan_gb}GB</div></div>
       <div class="plan-stats">
         <div class="ps"><div class="ps-lbl">Total SIMs</div><div class="ps-val" style="color:var(--sl)">${p.total}</div></div>
         <div class="ps"><div class="ps-lbl">Active</div><div class="ps-val" style="color:#4ade80">${p.active}</div></div>
@@ -1558,7 +1975,7 @@ function filterDG(){
   const sv=parseInt(document.getElementById('dg-sv').value)||0;
   dgFilt=dgRows.filter(r=>{
     if(!gfMatch(r))return false;
-    if(q&&!r.reg.toLowerCase().includes(q)&&!r.client.toLowerCase().includes(q)&&!(r.hw_id||'').toLowerCase().includes(q)&&!(r.sim_no||'').includes(q))return false;
+    if(q&&!r.reg.toLowerCase().includes(q)&&!r.client.toLowerCase().includes(q)&&!(r.hw_id||'').toLowerCase().includes(q)&&!(r.sim_no||'').includes(q)&&!provHit(r,q))return false;
     if(from&&r.plan_gb!=from)return false;
     if(to&&r.suggested_gb!=to)return false;
     if(r.saving_pct<sv)return false;
@@ -1582,7 +1999,7 @@ function renderDGT(){
     <td><span class="rc reg-link" onclick="openVSum('${r.reg}')">${r.reg}</span></td>
     <td><span class="cc">${r.client}</span></td>
     <td><span class="hw-cell">${r.hw_id||'—'}</span></td>
-    <td style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr)">${r.sim_no||'—'}</td>
+    <td style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr)">${provBadge(r)}${r.sim_no||'—'}</td>
     <td><span class="pc pc-cur">${r.plan_gb}GB</span></td>
     <td style="font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;color:var(--or)">${r.avg_gb!=null?r.avg_gb+' GB':'—'}</td>
     <td><div class="pw-wrap"><div class="pb-bg" style="width:70px"><div class="pb" style="width:${Math.min(r.usage_pct,100)}%;background:${barColor(r.usage_pct)}"></div></div><span style="font-size:11px;font-weight:600;color:${barColor(r.usage_pct)};min-width:36px">${r.usage_pct.toFixed(1)}%</span></div></td>
@@ -1597,21 +2014,18 @@ function renderDGT(){
 }
 function exportDG(fmt){
   const headers=['Reg No','Client','HW ID','SIM No','Current Plan (GB)','Avg Usage (GB)','Latest Used (GB)','Usage %','Suggested (GB)','Saving %','Confidence','Months Analyzed','Trend','Reason'];
-  const rows=dgFilt.map(r=>[r.reg,r.client,r.hw_id||'',String(r.sim_no||''),r.plan_gb,r.avg_gb!=null?r.avg_gb:'',r.used_gb,r.usage_pct,r.suggested_gb,r.saving_pct,r.rec_confidence||'',r.months_analyzed||'',r.trend||'',r.rec_reason||'']);
-  const SIM=[3];
-  if(fmt==='csv') ExportUtils.csv('drivebuddyai_downgrade_candidates.csv',headers,rows,SIM);
-  else            ExportUtils.xlsx('drivebuddyai_downgrade_candidates.xlsx',headers,rows,SIM);
+  provExport('drivebuddyai_downgrade_candidates',fmt,headers,dgFilt,r=>[r.reg,r.client,r.hw_id||'',String(r.sim_no||''),r.plan_gb,r.avg_gb!=null?r.avg_gb:'',r.used_gb,r.usage_pct,r.suggested_gb,r.saving_pct,r.rec_confidence||'',r.months_analyzed||'',r.trend||'',r.rec_reason||''],[3]);
 }
 
 // ── TRENDS ─────────────────────────────────────────────────────────────────
-function showTrendEmpty(){document.getElementById('tr-no-data').style.display='';document.getElementById('tr-grid').style.display='none';}
+function showTrendEmpty(){document.getElementById('tr-no-data').style.display='';document.getElementById('tr-grid').style.display='none';document.getElementById('tr-count').textContent='—';document.getElementById('tr-pag').innerHTML='';}
 function filterTR(){
   if(!trData.length)return;
   const q=(document.getElementById('tr-srch').value||'').toLowerCase();
   const pl=document.getElementById('tr-plan').value;
   trFilt=trData.filter(v=>{
     if(!gfMatch(v))return false;
-    if(q&&!v.reg.toLowerCase().includes(q)&&!v.client.toLowerCase().includes(q))return false;
+    if(q&&!v.reg.toLowerCase().includes(q)&&!v.client.toLowerCase().includes(q)&&!provHit(v,q))return false;
     if(pl&&v.plan!==pl)return false;
     return true;
   });
@@ -1662,9 +2076,9 @@ function renderTR(){
       <div class="trend-card-hdr">
         <div>
           <div class="trend-reg">${v.reg} <span style="font-size:10px;color:var(--gr);font-weight:400">↗ click for details</span></div>
-          <div class="trend-client">${v.client} · ${pShort(v.plan)}</div>
+          <div class="trend-client">${provBadge(v)}${v.client} · ${pShort(v.plan)}</div>
         </div>
-        <span class="sp ${sc}">${v.sim_status}</span>
+        <span class="sp ${sc}">${v.sim_state||v.sim_status}</span>
       </div>
       <div class="trend-chart">${bars}</div>
       <table class="trend-table">
@@ -1677,17 +2091,19 @@ function renderTR(){
 }
 
 // ── VEHICLE SUMMARY MODAL ──────────────────────────────────────────────────
-function openVSum(reg){
+function openVSum(reg,prov){
   if(!CD)return;
-  const v=CD.vehicles.find(x=>x.reg===reg);
+  // prov: open one provider's vehicle whatever provider view is on screen (the universal SIM search)
+  const own=prov&&window.Providers?Providers.raw(prov):null;
+  const v=(own?own.CD:CD).vehicles.find(x=>x.reg===reg);
   if(!v){showToast('Vehicle not found','error');return;}
   // Find trend data if available
-  const td=trData.find(x=>x.reg===reg);
+  const td=(own?own.trData||[]:trData).find(x=>x.reg===reg);
   const months=td?.months||[];
 
   const bc=barColor(v.usage_pct);
   const bw=Math.min(v.usage_pct,100);
-  const price=extractPrice(v.plan);
+  const price=window.Providers?Providers.priceFor(v):extractPrice(v.plan);
   const wastage=price&&v.plan_gb>0?Math.round((Math.max(0,v.plan_gb-v.used_gb)/v.plan_gb)*price):null;
   const cpu=price&&v.used_gb>0?Math.round(price/v.used_gb*100)/100:null;
   const fbClass=fbCls(v.flag);
@@ -1793,7 +2209,7 @@ function openVSum(reg){
         <div class="vsum-hw">HW: ${v.hw_id||'—'} &nbsp;·&nbsp; SIM: ${v.sim_no&&v.sim_no!=='nan'?v.sim_no:'—'}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-        <span class="sp ${sc}">${v.sim_status}</span>
+        <span class="sp ${sc}">${v.sim_state||v.sim_status}</span>
         <span class="fb ${fbClass}"><span class="dot ${dotCls(v.flag)}"></span>${v.flag}</span>
       </div>
     </div>
@@ -1840,7 +2256,7 @@ function openVSum(reg){
         <div class="vsum-detail-row"><span class="vsum-detail-label">Plan</span><span class="vsum-detail-val">${v.plan||'—'}</span></div>
         <div class="vsum-detail-row"><span class="vsum-detail-label">Plan Size</span><span class="vsum-detail-val">${v.plan_gb>0?v.plan_gb+' GB':'—'}</span></div>
         <div class="vsum-detail-row"><span class="vsum-detail-label">SIM No.</span><span class="vsum-detail-val" style="font-family:'Roboto',monospace;font-size:11px">${v.sim_no&&v.sim_no!=='nan'?v.sim_no:'—'}</span></div>
-        <div class="vsum-detail-row"><span class="vsum-detail-label">SIM Status</span><span class="vsum-detail-val"><span class="sp ${sc}">${v.sim_status}</span></span></div>
+        <div class="vsum-detail-row"><span class="vsum-detail-label">SIM Status</span><span class="vsum-detail-val"><span class="sp ${sc}">${v.sim_state||v.sim_status}</span></span></div>
         <div class="vsum-detail-row"><span class="vsum-detail-label">Hardware ID</span><span class="vsum-detail-val" style="font-family:'Roboto',monospace;font-size:11px">${v.hw_id||'—'}</span></div>
         <div class="vsum-detail-row"><span class="vsum-detail-label">Vehicle Status</span><span class="vsum-detail-val">${v.status||'—'}</span></div>
         <div class="vsum-detail-row"><span class="vsum-detail-label">Client</span><span class="vsum-detail-val">${v.client||'—'}</span></div>
@@ -1848,10 +2264,12 @@ function openVSum(reg){
       </div>
     </div>
 
+    ${window.ProvidersUI?ProvidersUI.vsumExtra(v):''}
     ${smartSection}
     ${trendSection}`;
 
   document.getElementById('vsum-modal').classList.add('open');
+  if(window.ProvidersUI)ProvidersUI.afterVsum(v);
 }
 function closeVSum(){document.getElementById('vsum-modal').classList.remove('open');}
 document.addEventListener('DOMContentLoaded',()=>{
@@ -1859,12 +2277,11 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 function exportTR(fmt){
   if(!trData.length)return;
-  const months=trData[0]?.months?.map(m=>m.label)||[];
+  // Month columns = every month in the exported rows, values matched by label (not by position)
+  const months=(window.Providers?Providers.sortMonths:(x=>x))([...new Set(trFilt.flatMap(v=>(v.months||[]).map(m=>m.label)))]);
   const headers=['Reg No','Client','HW ID','SIM Number (ICCID)','Plan','SIM Status',...months.map(m=>m+' Used (GB)')];
-  const rows=trFilt.map(v=>[v.reg,v.client,v.hw_id||'',String(v.sim_no||''),v.plan,v.sim_status,...(v.months||[]).map(m=>+(m.used_mb/1024).toFixed(2))]);
-  const SIM=[3];
-  if(fmt==='csv') ExportUtils.csv('drivebuddyai_trends.csv',headers,rows,SIM);
-  else            ExportUtils.xlsx('drivebuddyai_trends.xlsx',headers,rows,SIM);
+  provExport('drivebuddyai_trends',fmt,headers,trFilt,v=>{const by={};(v.months||[]).forEach(m=>{by[m.label]=m;});
+    return [v.reg,v.client,v.hw_id||'',String(v.sim_no||''),v.plan,v.sim_state||v.sim_status,...months.map(l=>by[l]?+(by[l].used_mb/1024).toFixed(2):'')];},[3]);
 }
 
 // ── PAGINATION ─────────────────────────────────────────────────────────────
@@ -1889,7 +2306,7 @@ function pgClick(id,n){pgHandlers[id]&&pgHandlers[id](n);window.scrollTo({top:0,
 function dl(content,filename){const blob=new Blob([content],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();}
 
 // ── MODAL ──────────────────────────────────────────────────────────────────
-function openModal(){document.getElementById('up-modal').classList.add('open');}
+function openModal(){document.getElementById('up-modal').classList.add('open');if(window.ProvidersUI)ProvidersUI.onOpenModal();}
 function closeModal(){document.getElementById('up-modal').classList.remove('open');}
 document.getElementById('up-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
 
@@ -1911,6 +2328,7 @@ function setUploadMode(m){
       inp.max=today; // disallow future dates
     }
   }
+  if(window.ProvidersUI)ProvidersUI.onUploadMode(m); // providers with their own upload modes follow (VI: Monthly / Real-time)
   checkProcBtn();
 }
 
@@ -1967,6 +2385,7 @@ function handleFile(file,type){
     }else{
       csv=parseCSV(e2.target.result);
     }
+    csv.fileName=file.name;   // upload history
     parsedCSV[type]=csv;
     if(type==='v')buildColMap('veh-cmap','veh-cmap-grid',csv.headers,VEH_COLS,vColMap);
     else if(type==='u')buildColMap('use-cmap','use-cmap-grid',csv.headers,USE_COLS,uColMap);
@@ -2050,12 +2469,14 @@ function handleMonthFile(e,idx){
   document.getElementById('mfbtn-'+idx).classList.add('has-file');
   document.getElementById('mrow-'+idx).classList.add('loaded');
   const reader=new FileReader();
-  reader.onload=e2=>{monthSlots[idx].parsed=parseCSV(e2.target.result);checkProcBtn();};
+  reader.onload=e2=>{monthSlots[idx].parsed=parseCSV(e2.target.result);monthSlots[idx].parsed.fileName=file.name;checkProcBtn();};
   reader.readAsText(file);
 }
 function updateMonthCount(){document.getElementById('month-count-hint').textContent=monthSlots.length+' month'+(monthSlots.length!==1?'s':'')+' added';}
 
 function checkProcBtn(){
+  // Registry-driven providers (VI …) own their upload form; Airtel keeps the legacy modes below
+  if(window.ProvidersUI&&!ProvidersUI.usesLegacyUpload()){document.getElementById('proc-btn').disabled=!ProvidersUI.canProcess();return;}
   let ok=false;
   if(uploadMode==='single') ok=!!(parsedCSV.v||parsedCSV.u);
   else if(uploadMode==='realtime') ok=!!parsedCSV.rt;
@@ -2118,7 +2539,30 @@ function updateCM(sec,key,val){if(sec.includes('veh'))vColMap[key]=val;else uCol
 // ── PROCESS ────────────────────────────────────────────────────────────────
 function setProgress(p,msg){document.getElementById('proc-bar').style.display='';document.getElementById('proc-status').textContent=msg;document.getElementById('proc-fill').style.width=p+'%';}
 
+// Upload history for Airtel uploads — best effort, never blocks or changes the upload itself.
+// The files are noted when processing starts and written to the history only once the data loads.
+let PENDING_AIRTEL_HISTORY=null;
+function recordAirtelUploadHistory(){
+  if(!window.ProvidersUI)return;
+  try{
+    const f=(c,period)=>c&&c.fileName?{name:c.fileName,rows:c.rows?c.rows.length:null,period:period||null}:null;
+    const list=uploadMode==='single'?[['airtel_vehicles',[f(parsedCSV.v)]],['airtel_monthly',[f(parsedCSV.u)]]]
+      :uploadMode==='realtime'?[['airtel_realtime',[f(parsedCSV.rt)]],['airtel_vehicles',[f(parsedCSV.rv)]]]
+      :[['airtel_vehicles',[f(parsedCSV.mv)]],['airtel_multi_month',monthSlots.filter(m=>m.parsed&&m.label).map(m=>f(m.parsed,m.label))]];
+    PENDING_AIRTEL_HISTORY={at:Date.now(),list};
+  }catch(e){console.warn('[upload-history]',e);PENDING_AIRTEL_HISTORY=null;}
+}
+function flushAirtelUploadHistory(){
+  const p=PENDING_AIRTEL_HISTORY;PENDING_AIRTEL_HISTORY=null;
+  // Only an upload that finished within a minute — an abandoned attempt is never logged as a success
+  if(!p||!window.ProvidersUI||Date.now()-p.at>60000)return;
+  p.list.forEach(([type,files])=>ProvidersUI.recordLegacyUpload(type,files));
+}
 function processUpload(){
+  if(window.ProvidersUI&&!ProvidersUI.usesLegacyUpload()){ProvidersUI.processUpload();return;}
+  // An Airtel upload must be visible after processing
+  if(window.Providers&&!Providers.inView('airtel'))Providers.select('airtel');
+  recordAirtelUploadHistory();
   setProgress(10,'Reading files…');
   setTimeout(()=>{
     try{
@@ -2126,6 +2570,7 @@ function processUpload(){
       else if(uploadMode==='realtime') processRealtime();
       else processMulti();
     }catch(err){
+      PENDING_AIRTEL_HISTORY=null;
       document.getElementById('proc-bar').style.display='none';
       showToast('❌ Error: '+err.message,'error');console.error(err);
     }
@@ -2157,7 +2602,7 @@ function buildUsageMap(csv, cm){
    Uses outlier-trimmed average + linear trend so one bad month
    never triggers a wrong recommendation.
    ─────────────────────────────────────────────────────────────── */
-function smartRecommend(v){
+function smartRecommend(v,tiers=TIERS){   // tiers: the provider's plan sizes (Airtel default: TIERS)
   const months=v.months||[];
   const plan_gb=v.plan_gb||0;
   const plan_mb=plan_gb*1024;
@@ -2211,10 +2656,10 @@ function smartRecommend(v){
     rec_reason=`SIM is not active or has no plan assigned.`;
   }else if(mean>plan_mb*0.95){
     rec_type='upgrade';
-    upgrade_gb=TIERS.find(t=>t>plan_gb)||null;
+    upgrade_gb=tiers.find(t=>t>plan_gb)||null;
     rec_reason=`Average usage ${avgGb} GB (${avgPct}% of ${plan_gb} GB plan) over ${n} months consistently exceeds capacity. Upgrade recommended.`;
   }else if(neededGb<plan_gb*0.65){
-    const sug=TIERS.find(t=>t>=neededGb&&t<plan_gb)||null;
+    const sug=tiers.find(t=>t>=neededGb&&t<plan_gb)||null;
     if(sug){
       rec_type='downgrade';
       suggested_gb=sug;
@@ -2251,7 +2696,7 @@ function mergeToVehicles(vehRows, usageMap){
 
 function buildStats(vehicles){
   // A vehicle has a SIM number but no usage data when sim_no is present yet plan is empty
-  const noUsage=vehicles.filter(v=>v.sim_no&&!v.plan).length;
+  const noUsage=vehicles.filter(v=>v.sim_no&&!v.plan&&!usedWithoutPlan(v)).length;
   const noSim=vehicles.filter(v=>!v.sim_no).length;
   return{total:vehicles.length,with_plan:vehicles.filter(v=>v.plan).length,
     no_usage:noUsage,no_sim:noSim,
@@ -2387,7 +2832,8 @@ function processMulti(){
   // Build a SIM→month map from currently loaded trData so we can preserve
   // months that were NOT part of this upload (incremental merge).
   const existingMonthsBySim={};
-  trData.forEach(v=>{
+  // Airtel's own history — the on-screen trData may be a multi-provider view
+  (window.Providers?Providers.raw('airtel').trData:trData).forEach(v=>{
     if(!v.sim_no||!v.months)return;
     const mMap={};
     v.months.forEach(m=>{mMap[m.label]=m;});
@@ -2564,12 +3010,17 @@ function cloudToggle(label,on){
 
 // Silent background push — called automatically after processMulti.
 // Pushes only the specified month labels; no button state changes.
+// Airtel's own data for the legacy Airtel tables — never the (possibly multi-provider) view on screen
+function airtelTr(){return window.Providers?Providers.raw('airtel').trData:trData;}
+function airtelCD(){return window.Providers?Providers.raw('airtel').CD:CD;}
+function airtelRt(){return window.Providers?Providers.raw('airtel').rtRows:rtRows;}
+
 async function cloudSilentPush(labels){
   if(!labels||!labels.length)return;
   if(!sb&&!sbInit()){console.warn('[cloud] silent push skipped — Supabase not ready');return;}
   const labelsSet=new Set(labels);
   const byMonth={};
-  trData.forEach(v=>{
+  airtelTr().forEach(v=>{
     (v.months||[]).forEach(m=>{
       if(!labelsSet.has(m.label))return;
       if(!byMonth[m.label])byMonth[m.label]={month_label:m.label,vehicles:[]};
@@ -2592,12 +3043,12 @@ async function cloudSilentPush(labels){
 }
 
 async function cloudPushAllMonths(){
-  if(!sb||!trData.length){showToast('No multi-month data loaded. Upload via "📂 Upload Data" first.','error');return;}
+  if(!sb||!airtelTr().length){showToast('No multi-month Airtel data loaded. Upload via "📂 Upload Data" first.','error');return;}
   const btn=document.getElementById('cloud-push-btn');
   btn.disabled=true;btn.textContent='⏳ Uploading…';
   // Pivot trData (vehicle-keyed) → month-keyed snapshots
   const byMonth={};
-  trData.forEach(v=>{
+  airtelTr().forEach(v=>{
     (v.months||[]).forEach(m=>{
       if(!byMonth[m.label])byMonth[m.label]={month_label:m.label,vehicles:[]};
       byMonth[m.label].vehicles.push({reg:v.reg,client:v.client,hw_id:v.hw_id,sim_no:v.sim_no,used_mb:m.used_mb,used_gb:m.used_gb,plan:m.plan||v.plan,plan_gb:m.plan_gb,usage_pct:m.usage_pct,sim_status:v.sim_status});
@@ -2623,20 +3074,22 @@ async function cloudPushAllMonths(){
 }
 
 async function cloudPushVehicles(){
-  if(!sb||!CD||!CD.vehicles||!CD.vehicles.length){showToast('No vehicles loaded','error');return;}
+  const fleetCD=airtelCD();   // the full vehicle master, not a provider-filtered view
+  if(!sb||!fleetCD||!fleetCD.vehicles||!fleetCD.vehicles.length){showToast('No vehicles loaded','error');return;}
   const btn=document.getElementById('cloud-push-veh-btn');
   btn.disabled=true;btn.textContent='⏳ Uploading…';
   try{
-    const rec={vehicle_count:CD.vehicles.length,data:CD.vehicles,uploaded_at:new Date().toISOString()};
+    const rec={vehicle_count:fleetCD.vehicles.length,data:fleetCD.vehicles,uploaded_at:new Date().toISOString()};
     const {error}=await sb.from('vehicle_master').insert(rec);
     if(error)throw error;
-    showToast(`✅ ${CD.vehicles.length} vehicles saved to cloud`,'success');
+    showToast(`✅ ${fleetCD.vehicles.length} vehicles saved to cloud`,'success');
     await cloudRefresh();
   }catch(e){console.error(e);showToast('❌ '+e.message,'error');}
   finally{btn.disabled=false;btn.textContent='🚛 Push Vehicle Master';}
 }
 
 async function cloudPushRealtime(){
+  const rtRows=airtelRt();   // Airtel's own snapshot rows (shadows the on-screen view inside this function)
   if(!sb||!rtRows.length){showToast('No real-time data loaded','error');return;}
   const btn=document.getElementById('cloud-push-rt-btn');
   if(btn){btn.disabled=true;btn.textContent='⏳ Uploading…';}
@@ -2702,13 +3155,15 @@ async function rtLoadSnapshot(snapId){
     const {data,error}=await sb.from('realtime_snapshots').select('snapshot_date,data').eq('id',snapId).single();
     if(error)throw error;
     const fin=rtFinalize(data.data||[]);
-    rtRows=fin.rows;
-    if(fin.stats.skipped||fin.stats.dupDropped||fin.stats.merged)console.log('[realtime] Snapshot clean-up:',fin.stats,'→',rtRows.length,'unique SIMs');
+    if(fin.stats.skipped||fin.stats.dupDropped||fin.stats.merged)console.log('[realtime] Snapshot clean-up:',fin.stats,'→',fin.rows.length,'unique SIMs');
     rtFilt=[];
     document.getElementById('rt-snapshot-info').style.display='';
     const d=new Date(data.snapshot_date);
     document.getElementById('rt-snapshot-date').textContent=d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})+' at '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-    renderRT();
+    // Saved snapshots in realtime_snapshots are Airtel's (the legacy table); an older one is not the current SIM list
+    const latest=!window._rtSnapshots||!window._rtSnapshots.length||String(window._rtSnapshots[0].id)===String(snapId);
+    if(window.Providers)Providers.ingestAirtelRt(fin.rows,{latest});
+    else{rtRows=fin.rows;renderRT();}
     showToast(`📅 Loaded snapshot from ${d.toLocaleDateString('en-IN')}`,'success');
   }catch(e){showToast('❌ Could not load snapshot: '+e.message,'error');}
 }
@@ -2827,7 +3282,12 @@ function applyMasterFleet(masterVehicles){
 function flagFor(pct){if(pct>=100)return'EXCEEDED';if(pct>=90)return'CRITICAL';if(pct>=75)return'WARNING';if(pct>=50)return'MODERATE';if(pct>0)return'OK';return'NO DATA';}
 
 // Auto-load on startup: vehicle master is authoritative, trends merge on top
+// When it has finished (or was skipped), Airtel's data is complete — the universal SIM search may index its SIMs
 async function cloudAutoLoad(){
+  try{await cloudAutoLoadSteps();}
+  finally{if(window.Providers&&Providers.setReady)Providers.setReady('airtel');}
+}
+async function cloudAutoLoadSteps(){
   if(!sbInit())return;
   try{
     // 1. Newest vehicle master = the authoritative fleet (source of truth)
@@ -2868,10 +3328,11 @@ async function cloudAutoLoad(){
       // Fallback to legacy single-row table
       const {data:legacy}=await sb.from('realtime_snapshot').select('data,uploaded_at').eq('id',1).maybeSingle();
       if(legacy&&legacy.data){
-        rtRows=rtFinalize(legacy.data).rows;
+        const legacyRows=rtFinalize(legacy.data).rows;
         document.getElementById('rt-snapshot-info').style.display='';
         document.getElementById('rt-snapshot-date').textContent=new Date(legacy.uploaded_at).toLocaleString('en-IN');
-        renderRT();
+        if(window.Providers)Providers.ingestAirtelRt(legacyRows);
+        else{rtRows=legacyRows;renderRT();}
         console.log('[cloud] Loaded legacy realtime snapshot');
       }
     }
@@ -2911,6 +3372,8 @@ setTimeout(cloudAutoLoad,1500);
   veil.remove();
   init();
   applyViewerMode();
+  // Provider tables (VI …) + upload history; Airtel's own cloudAutoLoad runs as before
+  if(window.ProvidersUI)ProvidersUI.bootstrap();
 
   try{
     const right=document.querySelector('.hdr-right');

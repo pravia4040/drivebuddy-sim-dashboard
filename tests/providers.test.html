@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Provider unit tests — SIM dashboard</title>
+<style>
+  body{font:13px/1.5 ui-monospace,Consolas,monospace;background:#0e0e0e;color:#dadada;padding:18px}
+  h1{font:600 16px system-ui,sans-serif;color:#fff;margin:0 0 4px}
+  .sub{color:#757575;margin-bottom:14px}
+  .p{color:#4ade80}.f{color:#f87171;font-weight:bold}.g{color:#757575;margin-top:10px}
+  #sum{font:600 14px system-ui,sans-serif;margin:12px 0}
+</style>
+</head>
+<body>
+<h1>Provider unit tests</h1>
+<div class="sub">Synthetic data only (fake ICCIDs). Open through <code>python tools/serve_local.py --mock</code> → <code>/tests/providers.test.html</code>.</div>
+<div id="sum">Running…</div>
+<pre id="log"></pre>
+<script>
+// Minimal stand-ins for the dashboard globals the provider modules call
+const TIERS=[2,5,10,20,85,100,175,200];
+const PLAN_PRICES={2:100,10:149,20:199,85:375,100:499,175:850,200:999};
+function extractGB(p){const m=(p||'').match(/(\d+)GB/);return m?parseInt(m[1]):0;}
+function extractPrice(p){const m=(p||'').match(/INR\s*(\d+)\s*PM/i);return m?parseInt(m[1]):PLAN_PRICES[extractGB(p)]||null;}
+function getFlag(p){if(p>=100)return'EXCEEDED';if(p>=90)return'CRITICAL';if(p>=75)return'WARNING';if(p>=50)return'MODERATE';if(p>0)return'OK';return'NO DATA';}
+function buildStats(v){return{total:v.length,with_plan:v.filter(x=>x.plan).length,no_usage:v.filter(x=>x.sim_no&&!x.plan).length,no_sim:v.filter(x=>!x.sim_no).length,at_100:v.filter(x=>x.usage_pct>=100).length,critical:v.filter(x=>x.usage_pct>=90&&x.usage_pct<100).length,warning:v.filter(x=>x.usage_pct>=75&&x.usage_pct<90).length};}
+function isNoUsage(v){const s=(v.sim_no||'').trim();return s!==''&&s!=='nan'&&!v.plan;}
+let VIEWS=[];function applyProviderView(v){VIEWS.push(v);}
+</script>
+<script src="../js/providers/registry.js"></script>
+<script src="../js/providers/vi.js"></script>
+<script src="../js/providers/search.js"></script>
+<script>
+(async function(){
+const LOG=document.getElementById('log');let pass=0,fail=0;
+const ok=(c,m)=>{c?pass++:fail++;LOG.innerHTML+=`<span class="${c?'p':'f'}">${c?'PASS':'FAIL'}</span> ${m}\n`;};
+const eq=(a,b,m)=>ok(JSON.stringify(a)===JSON.stringify(b),`${m} (got ${JSON.stringify(a)}, want ${JSON.stringify(b)})`);
+const near=(a,b,m,t=1e-6)=>ok(Math.abs(a-b)<=t,`${m} (got ${a}, want ${b})`);
+const group=t=>LOG.innerHTML+=`<div class="g">— ${t}</div>`;
+const V=ViProvider;
+const TODAY='2026-10-06';                       // Sep 2026 closed, Oct 2026 open
+const bd=a=>V.buildDataset(Object.assign({today:TODAY},a));
+
+// ── synthetic VI exports (same columns as the real Self-Care files) ──
+const E='S-TEST0001-0C0000-TEST CUSTOMER';
+const SUMH='E_CODE,ACCOUNT_ID,MSISDN,IMSI,ICCID,CIRCLE,TOTAL_USAGE:Data-kiloBytes/Voice-Seconds/SMS-Count,ORIGIN_CIRCLE,Last_Packet_Switched_Session_End,Packet_Switched_Session_Days';
+const sum=rows=>[SUMH,...rows].join('\n');
+const S1=sum([
+  `${E},1,915700000000001,404000000000001,~8991000000000000001,1130499,1048576.0000,GUJ_HOME,2026-09-20 10:00:00,20`,  // 1 GB
+  `${E},1,915700000000002,404000000000002,~8991000000000000002,1130499,524288.0000,GUJ_HOME,2026-09-10 10:00:00,5`,   // 0.5 GB, circle A
+  `${E},1,915700000000002,404000000000002,~8991000000000000002,1130569,524288.0000,MAH_GUJ,2026-09-21 23:00:00,3`,    // 0.5 GB, circle B
+  `${E},1,915700000000003,404000000000003,~8991000000000000003,1130499,90177536.0000,NULL,2026-09-21 12:00:00,30`,     // 86 GB (over an 85 GB share)
+  `${E},1,915700000000001,404000000000001,~8991000000000000001,1130499,1048576.0000,GUJ_HOME,2026-09-20 10:00:00,20`,  // exact repeat → duplicate
+  `${E},1,915700000000009,404000000000009,~12345,1130499,1024,NULL,2026-09-01 00:00:00,1`,                              // invalid ICCID
+  `${E},1,915700000000008,404000000000008,~8991000000000000008,1130499,NULL,NULL,2026-09-01 00:00:00,1`,               // missing usage
+]);
+// itemized: same rows + 3 day columns (bytes) + totals
+const ITH='E_CODE,ACCOUNTID,MSISDN,IMSI,ICCID,CIRCLE,2026-08-22,2026-08-23,2026-09-21,TOTAL_USAGE:Data-KiloBytes/Voice-Seconds/SMS-Count,ORIGIN_CIRCLE,Last_Packet_Switched_Session_End,Packet_Switched_Session_Days';
+const it=rows=>[ITH,...rows].join('\n');
+const B=gb=>Math.round(gb*1024*1024*1024);
+const I1=it([
+  `${E},1,915700000000001,404000000000001,~8991000000000000001,1130499,${B(0.5)},NULL,${B(0.5)},1048576.0000,GUJ_HOME,2026-09-20 10:00:00,2`,
+  `${E},1,915700000000002,404000000000002,~8991000000000000002,1130499,${B(0.5)},NULL,NULL,524288.0000,GUJ_HOME,2026-09-10 10:00:00,1`,
+  `${E},1,915700000000002,404000000000002,~8991000000000000002,1130569,${B(0.25)},NULL,${B(0.25)},524288.0000,MAH_GUJ,2026-09-21 23:00:00,2`,
+  `${E},1,915700000000003,404000000000003,~8991000000000000003,1130499,${B(40)},${B(40)},${B(6)},90177536.0000,NULL,2026-09-21 12:00:00,3`,
+]);
+const GH='E_CODE,ACCOUNT_ID,SUB_PROFILE_ID,SUB_PROFILE_NAME,PRODUCT_TYPE,MSISDN,IMSI,ICCID,CIRCLE,DATE_OF_ACTIVATION,SIM_LIFECYCLE_STATE,DEAL_NAME,BASE_PLAN_NAME,GROUP_NAME,CONTRACT_START_DATE,CONTRACT_END_DATE,CONTRACT_NAME';
+const inv=rows=>[GH,...rows].join('\n');
+const DP='CMP_VI_IOT_TEST_DP_100SMS_85GB_375R_GUJ', DPB='CMP_VI_IOT_TEST_DP_100SMS_85GB_375R', RD='CMP_Vi_IOT_READY_0_TEST_GUJ', P100='IOT_TEST0001_IOT_100GB_499_X_M2MISAFE_X';
+const G1=inv([
+  `${E},1,2,TEST,M2M,915700000000001,404000000000001,~8991000000000000001,Gujarat,2026-08-01 10:00:00.000000,active,${DP},${DPB},,,,NULL`,
+  `${E},1,2,TEST,M2M,915700000000002,404000000000002,~8991000000000000002,Gujarat,2026-08-01 10:00:00.000000,active,${DP},${DPB},,,,NULL`,
+  `${E},1,2,TEST,M2M,915700000000003,404000000000003,~8991000000000000003,Gujarat,2026-08-01 10:00:00.000000,active,${DP},${DPB},,,,NULL`,
+  `${E},1,2,TEST,M2M,915700000000004,404000000000004,~8991000000000000004,Gujarat,2026-09-15 10:00:00.000000,active,${DP},${DPB},,,,NULL`,   // idle, recent
+  `${E},1,2,TEST,M2M,915700000000005,404000000000005,~8991000000000000005,Gujarat,2026-09-01 10:00:00.000000,Ready,${RD},CMP_Vi_IOT_READY_0,,,,NULL`,
+  `${E},1,2,TEST,M2M,915700000000006,404000000000006,~8991000000000000006,Gujarat,2025-09-01 10:00:00.000000,Dunning,${P100},CMP_Vi_IOT_100GB_499,,,,NULL`,
+  `${E},1,2,TEST,M2M,915700000000007,404000000000007,~8991000000000000007,Gujarat,2025-09-01 10:00:00.000000,suspend,${P100},CMP_Vi_IOT_100GB_499,,,,NULL`,
+  `${E},1,2,TEST,M2M,915700000000007,404000000000007,~8991000000000000007,Gujarat,2025-09-01 10:00:00.000000,suspend,${P100},CMP_Vi_IOT_100GB_499,,,,NULL`, // repeat
+]);
+
+group('file detection (by columns, not name)');
+eq(V.detect(SUMH.split(',')),'vi_usage_summary','summary detected');
+eq(V.detect(ITH.split(',')),'vi_usage_itemized','itemized detected');
+eq(V.detect(GH.split(',')),'vi_sim_inventory','SIM group detected');
+eq(V.detect(['SIM_NO','PLAN','USED DATA']),null,'Airtel file is not taken as VI');
+const misnamed=V.parseFile(S1,'SELFCARE_USAGE_ITEMIZED_x.csv');
+ok(misnamed.type==='vi_usage_summary'&&/columns are a Data Usage Summary/.test(misnamed.warnings[0].reason),'a misnamed file is typed by its columns and warned');
+
+group('usage summary');
+const s=V.parseFile(S1,'SELFCARE_USAGE_SUMMARY_20260925154743.csv');
+eq([s.stats.total,s.stats.valid,s.stats.duplicates,s.stats.invalid,s.stats.unique_sims],[7,4,1,2,3],'rows / valid / duplicate / invalid / SIMs');
+near(s.stats.total_mb,1024+512+512+88064,'KB → MB (1 KB = 1024 B)',1e-6);
+eq(s.unit,'KB','unit read from the header');
+eq(s.rows[0].iccid,'8991000000000000001','"~" text prefix stripped from ICCID');
+eq(s.errors.map(e=>e.reason),['Invalid or missing ICCID','Missing usage value'],'invalid rows reported with reasons');
+eq(s.suggestedMonth,'Sep 2026','month suggested from the last session date');
+eq(s.exportedAt,'2026-09-25 15:47:43','export time read from the VI file name');
+
+group('itemized (daily)');
+const d=V.parseFile(I1,'SELFCARE_USAGE_ITEMIZED.csv');
+eq([d.stats.valid,d.stats.unique_sims,d.stats.period_start,d.stats.period_end],[4,3,'2026-08-22','2026-09-21'],'rows, SIMs and billing cycle');
+eq(d.unit,'bytes per day','daily unit confirmed as bytes against TOTAL_USAGE');
+near(d.rows[3].daily_sum_mb,86*1024,'daily bytes → MB',0.01);
+eq(d.suggestedMonth,'Sep 2026','cycle 22 Aug – 21 Sep labelled Sep 2026');
+eq(V.monthLabelForDate('2026-08-21'),'Aug 2026','cycle ending 21 Aug → Aug 2026');
+
+group('billing cycle 22nd → 21st (usage resets on the 22nd)');
+eq(V.cycleForDate('2026-09-21'),{label:'Sep 2026',start:'2026-08-22',end:'2026-09-21',days:31,resets:'2026-09-22'},'21 Sep is the last day of the Sep 2026 cycle; it resets on 22 Sep');
+eq([V.cycleForDate('2026-09-22').label,V.cycleForDate('2026-09-22').start,V.cycleForDate('2026-09-22').end],['Oct 2026','2026-09-22','2026-10-21'],'22 Sep starts the Oct 2026 cycle');
+eq([V.cycleForDate('2026-12-25').label,V.cycleForDate('2026-12-25').end],['Jan 2027','2027-01-21'],'late December belongs to next year\'s January cycle');
+eq([V.cycleForDate('2026-01-05').start,V.cycleForLabel('Mar 2026').days],['2025-12-22',28],'early January: cycle started 22 Dec; the Mar cycle (22 Feb – 21 Mar) has 28 days');
+eq(V.monthLabelForDate('2026-09-23'),'Oct 2026','a date after the 22nd belongs to the next month\'s cycle');
+const S2=sum([
+  `${E},1,915700000000001,404000000000001,~8991000000000000001,1130499,1024,GUJ_HOME,2026-09-21 22:00:00,20`,
+  `${E},1,915700000000002,404000000000002,~8991000000000000002,1130499,1024,GUJ_HOME,2026-09-20 10:00:00,5`,
+  `${E},1,915700000000003,404000000000003,~8991000000000000003,1130499,1024,GUJ_HOME,2026-09-22 00:10:00,5`]);
+eq(V.parseFile(S2,'s.csv').suggestedMonth,'Sep 2026','Summary cycle = where most last sessions fall (one ending 22 Sep 00:10 does not move it)');
+const ITH2='E_CODE,ACCOUNTID,MSISDN,IMSI,ICCID,CIRCLE,2026-09-20,2026-09-21,2026-09-22,TOTAL_USAGE:Data-KiloBytes/Voice-Seconds/SMS-Count,ORIGIN_CIRCLE,Last_Packet_Switched_Session_End,Packet_Switched_Session_Days';
+const I2=[ITH2,`${E},1,915700000000001,404000000000001,~8991000000000000001,1130499,${B(1)},${B(2)},${B(4)},7340032,GUJ_HOME,2026-09-22 10:00:00,3`].join('\n');
+const d2=V.parseFile(I2,'x.csv');
+eq([d2.suggestedMonth,d2.stats.cycles.length,/2 billing cycles/.test(d2.warnings[0].reason)],['Sep 2026',2,true],'an Itemized file crossing the 22nd is flagged; its main cycle is used');
+const m4=V.mergeMonth(null,{itemized:d2},'Sep 2026');
+near([...V.simTotals(m4,'itemized').values()].reduce((a,x)=>a+x.used_mb,0),3*1024,'only the Sep-cycle days count (20–21 Sep = 3 GB); 22 Sep belongs to the next cycle',1e-6);
+eq([m4.period_start,m4.period_end,m4.last_data_date,m4.sources.itemized.dropped_days],['2026-08-22','2026-09-21','2026-09-21',1],'cycle bounds come from the label, not the file; the 22 Sep column is dropped');
+
+group('"Data up to" day of an Itemized upload (like Airtel\'s snapshot date)');
+const mU=V.mergeMonth(null,{itemized:d},'Sep 2026',null,{until:'2026-08-23'});
+near([...V.simTotals(mU,'itemized').values()].reduce((a,x)=>a+x.used_mb,0)/1024,81.25,'data up to 23 Aug: only 22–23 Aug count (0.5 + 0.75 + 80 GB)',1e-6);
+eq([mU.itemized_last,mU.itemized_until,Object.keys(mU.dailyTotals).sort()],['2026-08-23','2026-08-23',['2026-08-22','2026-08-23']],'later days are left out of the daily data too');
+const mU2=V.mergeMonth(mU,{summary:s},'Sep 2026');
+eq([mU2.itemized_until,V.itemizedLast(mU2)],['2026-08-23','2026-08-23'],'a later Summary upload keeps the Itemized report\'s date');
+
+group('SIM inventory + plans');
+const g=V.parseFile(G1,'SIMGROUP.csv');
+eq([g.stats.valid,g.stats.duplicates],[7,1],'inventory rows / repeats');
+eq(g.stats.states,{active:4,Ready:1,Dunning:1,suspend:1},'states kept exactly as VI writes them (active, Ready, Dunning, suspend)');
+eq([g.rows[0].lifecycle_state,g.rows[0].status],['active','Active'],'raw state kept; a normalised status beside it (never overwriting it)');
+eq((({plan_gb,price,pooled,ready})=>({plan_gb,price,pooled,ready}))(V.planInfo(DP)),{plan_gb:85,price:375,pooled:true,ready:false},'DP deal = 85 GB · ₹375 · pooled');
+eq((({plan_gb,price,pooled})=>({plan_gb,price,pooled}))(V.planInfo(P100)),{plan_gb:100,price:499,pooled:false},'100 GB deal (no _DP_) = ₹499, its own plan — not in the data pool');
+eq(V.planInfo('').pooled,false,'unknown plan (no allowance) is not counted in the pool');
+eq((({plan_gb,price,ready})=>({plan_gb,price,ready}))(V.planInfo(RD)),{plan_gb:0,price:0,ready:true},'READY deal = inventory, 0 GB, ₹0');
+
+group('merge + reconciliation (never double counted)');
+let m=V.mergeMonth(null,{summary:s,itemized:d},'Sep 2026');
+eq(m.recon.status,'matched','summary + itemized of the same cycle reconcile');
+const tot=mm=>[...V.simTotals(mm).values()].reduce((a,x)=>a+x.used_mb,0);
+near(tot(m),s.stats.total_mb,'month total = summary total (not summary + itemized)',1e-6);
+eq(V.simTotals(m).get('8991000000000000002').session_days,2,'session days counted once across circles (1 + 2 days, one shared → 2, not 3)');
+const m2=V.mergeMonth(m,{summary:s},'Sep 2026');
+near(tot(m2),tot(m),'re-uploading the summary replaces it — total unchanged',1e-6);
+const S1b=S1.replace('1048576.0000,GUJ_HOME,2026-09-20 10:00:00,20','2097152.0000,GUJ_HOME,2026-09-20 10:00:00,20');   // SIM 1 now 2 GB
+const m3=V.mergeMonth(m,{summary:V.parseFile(S1b,'s.csv')},'Sep 2026');
+near(tot(m3)-tot(m),1024,'corrected summary changes only the corrected SIM (+1 GB)',1e-6);
+eq([m3.recon.status,m3.recon.mismatches.length,m3.recon.mismatches[0].iccid],['difference',1,'8991000000000000001'],'difference found and pinned to the row');
+const mi=V.mergeMonth(null,{itemized:d},'Sep 2026');
+eq(mi.recon.status,'itemized_only','itemized alone → totals from itemized, flagged');
+const ms=V.mergeMonth(mi,{summary:s},'Sep 2026');
+eq([ms.recon.status,!!ms.daily],['matched',true],'summary added later keeps the daily data and reconciles');
+
+group('dataset for the dashboard');
+const fleet=[{reg:'GJ01AA0001',client:'Alpha',hw_id:'HW1',sim:'8991000000000000001'},{reg:'GJ01AA0002',client:'Beta',hw_id:'HW2',sim:'915700000000002'},
+  {reg:'GJ01AA0005',client:'Alpha',hw_id:'HW5',sim:'8991000000000000005'},{reg:'GJ01AA0099',client:'Gamma',hw_id:'HW9',sim:'8991982200000000099'}];
+const inventory={as_of:'2026-09-25 15:48:40',sims:g.rows};
+const ds=bd({inventory,months:{'Sep 2026':m},fleet});
+eq(ds.CD.vehicles.filter(v=>!v.unmapped).map(v=>v.reg).sort(),['GJ01AA0001','GJ01AA0002','GJ01AA0005'],'vehicles matched by ICCID and by MSISDN; non-VI SIM ignored');
+eq(ds.CD.vehicles.filter(v=>v.unmapped).map(v=>[v.reg,v.client,v.sim_no,v.plan_gb]),[['No vehicle · 915700000000003','No vehicle mapped','8991000000000000003',85],['No vehicle · 915700000000004','No vehicle mapped','8991000000000000004',85]],'SIMs with no vehicle in the vehicle master are still listed ("No vehicle · <mobile no.>") when they count or used data');
+ok(!ds.CD.vehicles.some(v=>/915700000000006|915700000000007/.test(v.reg)),'…a SIM that neither counts nor used data and has no vehicle (Dunning, suspend) is not listed');
+const v1=ds.CD.vehicles.find(v=>v.reg==='GJ01AA0001'), v5=ds.CD.vehicles.find(v=>v.reg==='GJ01AA0005');
+eq([v1.plan_gb,v1.used_gb,v1.usage_pct,v1.flag,v1.sim_status,v1.sim_state,v1.pooled,v1.in_pool],[85,1,1.2,'OK','Active','active',true,true],'vehicle row: plan, usage %, flag, normalised + raw status, in the pool');
+eq([v5.plan,v5.sim_status],['','Ready'],'Ready SIM shows as "without usage", not as a plan');
+eq(ds.rtRows.length,7,'SIM list = every inventory SIM');
+const r3=ds.rtRows.find(r=>r.sim_no==='8991000000000000003'), r5=ds.rtRows.find(r=>r.sim_no==='8991000000000000005'), r6=ds.rtRows.find(r=>r.sim_no==='8991000000000000006'), r7=ds.rtRows.find(r=>r.sim_no==='8991000000000000007');
+near(r3.avail_mb,85*1024-86*1024,'pooled SIM over its share: negative available = drawn from the pool',1e-6);
+eq([r5.alloc_mb,r6.alloc_mb,r7.alloc_mb],[0,0,0],'allocation only for SIMs that count: "active" on a data-pool deal (not Ready, Dunning or suspend)');
+eq([r6.sim_state,r7.sim_state,r6.in_pool],['Dunning','suspend',false],'real-time rows show the raw state');
+const P=ds.pool;
+const PR4=85/30*7;   // SIM 4 activated 15 Sep: 15–21 Sep = 7 days × 85/30 GB
+eq([P.pooled_sims,P.idle.count,P.idle.recent,P.over_share.count],[4,1,1,1],'pool: 4 active SIMs; 1 idle (started recently), 1 over its share');
+near(P.capacity_gb,3*85+PR4,'total pool: 3 × 85 GB full cycle + SIM 4 pro-rated 7 × 2.83 = 19.83 GB',1e-9);
+near(P.full_gb+P.prorated_gb,P.capacity_gb,'full allocation + pro-rated allocation = total pool',1e-9);
+eq([P.new_activations.count,Math.round(P.new_activations.gb*100)/100],[1,19.83],'new activations this cycle: 1 SIM, 19.83 GB');
+eq(P.plan_mix,[{gb:85,sims:3}],'full-cycle SIMs by plan size');
+eq([P.prorated.sims,P.prorated.groups[0].from,P.prorated.groups[0].days,P.prorated.divisor_days],[1,'2026-09-15',7,30],'pro-rated group: 1 SIM from 15 Sep, 7 days, plan ÷ 30');
+near(P.prorated.gb,PR4,'pro-rated allotment = 85 ÷ 30 × 7',1e-9);
+near(ds.rtRows.find(r=>r.sim_no==='8991000000000000004').alloc_mb/1024,PR4,'real-time allocation of SIM 4 is pro-rated',1e-9);
+eq([v1.alloc_gb,v1.prorated_days,v1.plan_gb],[85,null,85],'vehicle: full-cycle SIM keeps its 85 GB; Plan (GB) stays the plan size');
+near(P.used_gb,88,'pool used = Σ pooled SIM usage',1e-6);
+near(P.remaining_gb,P.capacity_gb-88,'pool available = allotted − used',1e-9);
+near(ds.rtRows.filter(r=>r.pooled).reduce((a,r)=>a+r.avail_mb,0)/1024,P.remaining_gb,'Σ SIM-level available = pool available (real-time tab agrees with the Data Pool tab)',1e-6);
+eq([P.monthly_cost,P.inventory_sims,P.eligible_sims,P.non_eligible_sims],[4*375,7,4,3],'pool cost 4 × ₹375; 7 SIMs in the SIM Group, 4 count, 3 do not');
+eq([P.rec.type,P.rec.saving],['oversized',375],'32% used → the idle SIM can leave the pool');
+ok(ds.simKeys.has('915700000000002')&&ds.simKeys.has('8991000000000000007'),'SIM keys include MSISDN and ICCID for ownership');
+
+group('"as of" a day — usage from the 22nd; the pool holds the SIMs activated by then');
+const dsA=bd({inventory,months:{'Sep 2026':m},fleet,asOf:'2026-08-23'});
+const rA=id=>dsA.rtRows.find(r=>r.sim_no===id);
+eq(dsA.asOf,'2026-08-23','as-of day applied');
+near(rA('8991000000000000003').used_mb/1024,80,'SIM 3 used 40 + 40 GB by the end of 23 Aug',1e-6);
+near(rA('8991000000000000002').used_mb/1024,0.75,'SIM 2: both circles summed (0.5 + 0.25 GB)',1e-6);
+eq(rA('8991000000000000004').alloc_mb,0,'SIM 4 (activated 15 Sep) had no allocation on 23 Aug');
+const PA=dsA.pool;
+eq([PA.pooled_sims,PA.capacity_gb,PA.not_yet_active,PA.days_elapsed,PA.complete],[3,255,1,2,false],'pool on 23 Aug: 3 × 85 GB = 255 GB (SIM 4 joins on 15 Sep); day 2 of 31');
+near(PA.used_gb,81.25,'pool used by the end of 23 Aug',1e-6);
+near(PA.remaining_gb,255-81.25,'pool remaining at the end of 23 Aug',1e-6);
+near(dsA.rtRows.filter(r=>r.pooled).reduce((a,r)=>a+r.avail_mb,0)/1024,PA.remaining_gb,'Σ SIM-level available = pool available on that day',1e-6);
+eq(dsA.CD.vehicles.find(v=>v.reg==='GJ01AA0001').used_gb,1,'vehicle tabs keep the cycle total (1 GB), not the as-of day');
+near(bd({inventory,months:{'Sep 2026':m},fleet,asOf:'2026-08-22'}).pool.used_gb,41.25,'reset: on the 22nd only that day\'s usage counts',1e-6);
+const dsL=bd({inventory,months:{'Sep 2026':m},fleet,asOf:'2026-09-21'});
+eq(dsL.asOf,null,'the last day with data = the cycle totals');
+near(dsL.pool.capacity_gb,255+PR4,'…with the full pro-rated pool',1e-9);
+eq(bd({inventory,months:{'Sep 2026':m},fleet,asOf:'2026-09-25'}).asOf,null,'a day outside the cycle on screen is ignored');
+const DD=ds.pool.days;
+eq([DD.length,DD[0].date,DD[0].pool_gb,DD[30].date],[31,'2026-08-22',255,'2026-09-21'],'day by day: 31 days, 255 GB on day 1');
+near(DD.find(x=>x.date==='2026-09-15').pool_gb-DD.find(x=>x.date==='2026-09-14').pool_gb,PR4,'SIM 4 adds its pro-rated 19.83 GB on its activation day (15 Sep)',1e-9);
+near(DD[1].cum_gb,81.25,'used so far at the end of 23 Aug',1e-6);
+near(DD[30].avail_gb,255+PR4-88,'remaining at the end of the cycle = pool − used',1e-9);
+group('pro-rated data for SIMs activated during the cycle (plan ÷ 30 per day left)');
+const cS=V.cycleForLabel('Sep 2026');
+const al=(act,plan=85,pooled=true)=>V.allotment({pi:{plan_gb:plan,pooled},activated:act},cS);
+eq([al('2026-08-01').gb,al('2026-08-22').gb,al('2026-08-01').days,al(null).gb],[85,85,null,85],'activated before or on the 22nd, or no date → full plan');
+near(al('2026-08-26').gb,76.5,'activated 26 Aug → 27 days × 85/30 = 76.5 GB',1e-9);
+near(al('2026-09-03').gb,85/30*19,'activated 3 Sep → 19 days × 2.83 = 53.83 GB',1e-9);
+near(al('2026-09-21').gb,85/30,'activated on the last day → 1 day = 2.83 GB',1e-9);
+eq(al('2026-08-23').gb,85,'30 days left of a 31-day cycle → capped at the plan (85 GB)');
+near(al('2026-09-08',100).gb,100/30*14,'a 100 GB pool plan pro-rates the same way (14 days × 3.33 GB)',1e-9);
+eq([al('2026-09-25').gb,al('2026-09-25').days],[0,0],'starts after the cycle end → nothing this cycle');
+eq(V.allotment({pi:{plan_gb:85,pooled:true},activated:'2026-09-15'},V.cycleForLabel('Oct 2026')).gb,85,'the next cycle gives the full 85 GB again');
+const dsOct=bd({inventory,months:{'Oct 2026':V.mergeMonth(null,{itemized:d2},'Oct 2026')},fleet});
+near(dsOct.pool.used_gb,4,'new cycle starts from zero on the 22nd: only 22 Sep (4 GB) counts, 20–21 Sep stay in Sep',1e-6);
+eq([dsOct.pool.days_elapsed,dsOct.pool.days_total,dsOct.pool.rec.type,/too early/.test(dsOct.pool.rec.text)],[1,30,'healthy',true],'day 1 of 30: pace only, no idle-SIM advice yet');
+V.state.months['Sep 2026']=m;
+const ao=V.asOfOptions();
+eq([ao.length,ao[0].label,ao[0].dates.length,ao[0].dates[0],ao[0].dates[30]],[1,'Sep 2026',31,'2026-09-21','2026-08-22'],'as-of picker: every day of the cycle, newest first');
+delete V.state.months['Sep 2026'];
+
+group('one source per use, as for Airtel: Monthly = Data Usage Summary, Real-time = Itemized report');
+const mS=V.mergeMonth(null,{summary:s},'Sep 2026'), mI=V.mergeMonth(null,{itemized:d},'Sep 2026');
+const dS=bd({inventory,months:{'Sep 2026':mS},fleet});
+eq([dS.months,dS.rtRows.length,dS.pool.hasPool,dS.pool.usage_src],[['Sep 2026'],0,true,'summary'],'Summary only: month-wise data and a pool from the Summary; no real-time rows until an Itemized report');
+ok(dS.pool.alerts.some(a=>a.code==='daily_older'&&/no Itemized report/.test(a.text)),'…and the pool says the daily charts and the Real-time tab need the Itemized report');
+eq(dS.CD.vehicles.find(v=>v.reg==='GJ01AA0001').used_gb,1,'…vehicle tabs use the Summary');
+const dI=bd({inventory,months:{'Sep 2026':mI},fleet});
+eq([dI.months,dI.rtMonths,dI.rtRows.length,dI.pool.hasPool],[[],['Sep 2026'],7,true],'Itemized only: real-time rows + pool; not a Month-filter month');
+eq(dI.CD.vehicles.find(v=>v.reg==='GJ01AA0001').used_gb,0,'…vehicle tabs get no month-wise usage from the Itemized report');
+near(dI.rtRows.find(r=>r.sim_no==='8991000000000000001').used_mb,1024,'…real-time usage comes from the Itemized report',1e-6);
+const S3=S1.replace('1048576.0000,GUJ_HOME,2026-09-20 10:00:00,20','2097152.0000,GUJ_HOME,2026-09-20 10:00:00,20');   // this Summary says SIM 1 used 2 GB
+const dX2=bd({inventory,months:{'Sep 2026':V.mergeMonth(mI,{summary:V.parseFile(S3,'s.csv')},'Sep 2026')},fleet});
+eq([dX2.CD.vehicles.find(v=>v.reg==='GJ01AA0001').used_gb,dX2.rtRows.find(r=>r.sim_no==='8991000000000000001').used_mb/1024],[2,1],'reports disagree: month-wise shows the Summary (2 GB), real-time the Itemized (1 GB) — never a mix');
+const dM=bd({inventory,months:{'Aug 2026':V.mergeMonth(null,{summary:s},'Aug 2026'),'Sep 2026':mI},fleet,month:'Aug 2026'});
+eq([dM.currentMonth,dM.rtMonth,dM.months],['Aug 2026','Sep 2026',['Aug 2026']],'Month filter on Aug (Summary) — real-time stays on the newest Itemized cycle, like Airtel');
+
+group('SIM counts: real-time list = SIM Group + Itemized SIMs; nothing is assumed');
+const S9=sum([`${E},1,915700000000009,404000000000009,~8991000000000000009,1130499,1048576.0000,GUJ_HOME,2026-08-20 10:00:00,5`]);   // a SIM seen only in an older Summary
+const dP=bd({inventory:null,months:{'Aug 2026':V.mergeMonth(null,{summary:V.parseFile(S9,'s.csv')},'Aug 2026'),'Sep 2026':mI},fleet});
+eq([dP.rtRows.length,dP.pool.hasPool,dP.pool.needsInventory],[3,false,true],'no SIM Group: the 3 SIMs in the Itemized report are listed (not SIMs from an older Summary); no pool without the SIM Group');
+const IL=it([`${E},1,915700000000005,404000000000005,~8991000000000000005,1130499,NULL,NULL,${B(2)},2097152.0000,GUJ_HOME,2026-09-21 10:00:00,1`]);   // SIM 5 is Ready in the SIM Group
+const dL=bd({inventory:{as_of:'2026-09-15 10:00:00',sims:g.rows},months:{'Sep 2026':V.mergeMonth(mI,{itemized:V.parseFile(IL,'x.csv')},'Sep 2026')},fleet});
+const r5L=dL.rtRows.find(r=>r.sim_no==='8991000000000000005');
+eq([r5L.sim_state,r5L.alloc_mb,r5L.in_pool,dL.pool.recon.usage_non_eligible],['Ready',0,false,1],'a Ready SIM that used data is NOT assumed active — not counted');
+ok(dL.pool.alerts.some(a=>a.code==='non_eligible_usage'&&/Ready/.test(a.text)&&/newer SIM Group/.test(a.text)),'…it is flagged: probably went live, upload a newer SIM Group file');
+ok(dL.pool.provisional&&dL.pool.alerts.some(a=>a.code==='provisional'),'a closed cycle with no SIM Group exported after its end is provisional, and says so');
+const m5=V.mergeMonth(m,{summary:V.parseFile(S1b,'SELFCARE_USAGE_SUMMARY_20260925154743.csv')},'Sep 2026');
+ok(m5.recon.status==='difference'&&/exported on 25 Sep 2026 at 15:47/.test(m5.recon.note||''),'Summary exported after the Itemized report\'s last day: the difference is explained');
+
+group('no SIM Group file: usage only, no pool, nothing assumed');
+const dsE=bd({inventory:null,months:{'Sep 2026':m},fleet});
+const PE=dsE.pool;
+eq([PE.hasPool,PE.needsInventory],[false,true],'no SIM Group: no pool (usage alone cannot size it)');
+const rE=dsE.rtRows.find(r=>r.sim_no==='8991000000000000003');
+eq([rE.alloc_mb,rE.used_mb,rE.avail_mb,rE.in_pool,rE.sim_state],[0,86*1024,0,false,'Not in SIM Group'],'real-time row: usage shown, no allocation, "Not in SIM Group"');
+const vE=dsE.CD.vehicles.find(v=>v.reg==='GJ01AA0001');
+eq([vE.plan_gb,vE.plan,vE.alloc_gb,vE.sim_state],[0,'',null,'Not in SIM Group'],'vehicle row: no plan is assumed');
+eq(Providers.get('vi').rates(),[],'price card without a SIM Group file: no plan is assumed');
+const dsX=bd({inventory:{as_of:'2026-09-25',sims:g.rows.filter(x=>x.iccid!=='8991000000000000003')},months:{'Sep 2026':m},fleet});
+eq([dsX.pool.recon.usage_no_inventory,Math.round(dsX.pool.recon.usage_no_inventory_gb)],[1,86],'Case 10: a SIM with usage but missing from the SIM Group is unmatched (86 GB)');
+near(dsX.pool.capacity_gb,2*85+PR4,'…and not added to the pool (SIMs 1, 2 full + SIM 4 pro-rated)',1e-9);
+ok(dsX.pool.alerts.some(a=>a.code==='not_in_group')&&dsX.pool.status_table.some(r=>r.state==='Not in SIM Group'&&r.sims===1&&r.pool_sims===0),'…flagged, and listed as "Not in SIM Group" in the status table');
+
+group('requirement edge cases (85 GB plan, cycle 22 Aug – 21 Sep, start day counts, ÷ 30, capped at the plan)');
+eq(al('2026-08-01').gb,85,'Case 1: started before the cycle → full 85 GB');
+eq([al('2026-08-22').gb,al('2026-08-22').days],[85,null],'Case 2: started on the cycle start (22nd) → full plan');
+near(al('2026-09-08').gb,85/30*14,'Case 3: started mid-cycle (8 Sep) → 14 days × 2.8333 = 39.67 GB',1e-9);
+near(al('2026-09-21').gb,85/30,'Case 4: started on the cycle end (21st) → 1 day = 2.83 GB',1e-9);
+eq(al('2026-09-22').gb,0,'Case 5: starts after the cycle end → 0 this cycle');
+const invRow=x=>Object.assign({iccid:'1',lifecycle_state:'active',deal_name:DP,base_plan_name:DPB},x);
+const el=x=>{const r=invRow(x);return V.eligibility(r,V.planInfo(r.deal_name,r.base_plan_name)).code;};
+eq(el({}),'eligible','Case 6: "active" on a data-pool deal counts');
+eq(el({lifecycle_state:'Ready',deal_name:RD,base_plan_name:'CMP_Vi_IOT_READY_0'}),'state','Case 7: "Ready" does not count (rule)');
+eq(el({lifecycle_state:'suspend'}),'state','Case 8: "suspend" does not count (rule)');
+const r4=ds.pool.sim_table.find(r=>r.iccid==='8991000000000000004');
+eq([r4.in_pool,r4.used_gb,r4.days,Math.round(r4.alloc_gb*100)/100,Math.round(r4.per_day*10000)/10000],[true,0,7,19.83,2.8333],'Case 9: a pooled SIM with no usage: used 0, still in the pool (7 days × 2.8333)');
+eq([el({lifecycle_state:'Dunning'}),el({deal_name:P100,base_plan_name:'CMP_Vi_IOT_100GB_499'}),el({deal_name:RD,base_plan_name:''}),el({lifecycle_state:'Barred'}),V.eligibility(null,V.planInfo('')).code],
+  ['state','not_pool_plan','no_plan','unknown_state','not_in_group'],'Dunning: rule says no · 100 GB deal: not a pool deal · READY deal: no plan · new state: no rule yet · not in the file');
+
+group('pool rules are configurable (admin), never hard-coded');
+eq([V.ruleFor('active'),V.ruleFor('ACTIVE'),V.ruleFor('Ready'),V.ruleFor('Dunning'),V.ruleFor('suspend'),V.ruleFor('Barred')],[true,true,false,false,false,null],'defaults: only "active" counts; an unknown state has no rule');
+V.setRules({status_rules:{Dunning:true}});
+const G2=inv([`${E},1,2,TEST,M2M,915700000000010,404000000000010,~8991000000000000010,Gujarat,2026-08-01 10:00:00.000000,Dunning,${DP},${DPB},,,,NULL`]);
+const dR=bd({inventory:{as_of:'2026-09-25 10:00:00',sims:g.rows.concat(V.parseFile(G2,'g.csv').rows)},months:{'Sep 2026':m},fleet});
+eq([dR.pool.eligible_sims,dR.pool.status_table.find(r=>r.state==='Dunning').pool_sims],[5,1],'rule changed: a Dunning SIM on a data-pool deal now counts; the 100 GB Dunning SIM still does not (no _DP_)');
+V.setRules({plan_days:31});
+near(al('2026-09-08').gb,85/31*14,'plan days come from the rules (÷ 31 here)',1e-9);
+V.setRules(null);
+near(al('2026-09-08').gb,85/30*14,'rules reset to the defaults',1e-9);
+const GU=inv([`${E},1,2,TEST,M2M,915700000000011,404000000000011,~8991000000000000011,Gujarat,2026-08-01 10:00:00.000000,Barred,${DP},${DPB},,,,NULL`]);
+const dU=bd({inventory:{as_of:'2026-09-25 10:00:00',sims:g.rows.concat(V.parseFile(GU,'g.csv').rows)},months:{'Sep 2026':m},fleet});
+ok(dU.pool.alerts.some(a=>a.code==='unknown_state'&&/"Barred" \(1\)/.test(a.text))&&dU.pool.status_table.some(r=>r.state==='Barred'&&r.rule===null&&r.pool_sims===0),'a new state ("Barred") is shown as it is, not counted, and flagged');
+ok((V.parseFile(GH.replace(',DATE_OF_ACTIVATION','')+'\n'+G1.split('\n')[1].replace(',2026-08-01 10:00:00.000000',''),'g.csv').fatal||'').includes('DATE_OF_ACTIVATION'),'a SIM Group without DATE_OF_ACTIVATION stops the upload with the reason');
+
+group('go-live: VI keeps the load day as DATE_OF_ACTIVATION — a SIM Ready in an older SIM Group starts when it went live');
+const GA=st=>`${E},1,2,TEST,M2M,915700000000021,404000000000021,~8991000000000000021,Gujarat,2026-09-08 10:00:00.000000,${st},${st==='Ready'?RD:DP},${st==='Ready'?'CMP_Vi_IOT_READY_0':DPB},,,,NULL`;
+const s25={as_of:'2026-09-25 15:48:40',sims:V.parseFile(inv([GA('Ready')]),'g.csv').rows};
+const s28={as_of:'2026-09-28 13:56:32',sims:V.parseFile(inv([GA('active')]),'g.csv').rows};
+const ITO='E_CODE,ACCOUNTID,MSISDN,IMSI,ICCID,CIRCLE,2026-09-25,2026-09-26,TOTAL_USAGE:Data-KiloBytes/Voice-Seconds/SMS-Count,ORIGIN_CIRCLE,Last_Packet_Switched_Session_End,Packet_Switched_Session_Days';
+const mO=V.mergeMonth(null,{itemized:V.parseFile([ITO,`${E},1,915700000000021,404000000000021,~8991000000000000021,1130499,NULL,${B(1)},1048576.0000,GUJ_HOME,2026-09-26 10:00:00,1`].join('\n'),'i.csv')},'Oct 2026');
+const aG=bd({inventory:s28,snapshots:[s25,s28],months:{'Oct 2026':mO},fleet}).pool.sim_table.find(r=>r.iccid==='8991000000000000021');
+eq([aG.start,aG.src,aG.how,aG.ready_at,aG.active_at],['2026-09-26','detected','first_use','2026-09-25','2026-09-28'],'Ready on 25 Sep, active on 28 Sep, first data 26 Sep → starts 26 Sep (not VI\'s 8 Sep)');
+near(aG.alloc_gb,85/30*26,'…26 days × 2.83 = 73.67 GB, not the full 85 GB',1e-9);
+const aG2=bd({inventory:s28,snapshots:[s25,s28],months:{'Oct 2026':V.mergeMonth(null,{itemized:d2},'Oct 2026')},fleet}).pool.sim_table.find(r=>r.iccid==='8991000000000000021');
+eq([aG2.start,aG2.how],['2026-09-28','sim_group'],'no data between the two files → the date of the file that first shows it active');
+eq(bd({inventory:s28,months:{'Oct 2026':mO},fleet}).pool.sim_table.find(r=>r.iccid==='8991000000000000021').src,'vi_date','never seen Ready → VI\'s DATE_OF_ACTIVATION');
+const s20={as_of:'2026-09-20 09:00:00',sims:s25.sims}, s28b={as_of:'2026-09-28 13:56:32',sims:V.parseFile(inv([GA('active').replace('2026-09-08 10:00:00','2026-09-23 10:00:00')]),'g.csv').rows};
+eq(bd({inventory:s28b,snapshots:[s20,s28b],months:{'Oct 2026':mO},fleet}).pool.sim_table.find(r=>r.iccid==='8991000000000000021').start,'2026-09-23','VI\'s date already after the Ready file → VI\'s date');
+
+group('closed cycles are frozen with the first SIM Group exported on or after their last day');
+const inv25={as_of:'2026-09-25 15:48:40',sims:g.rows};
+const rec=V.freezeRecord('Sep 2026',inv25,[inv25],{'Sep 2026':m});
+eq([rec.reporting_period,rec.snapshot_at,rec.eligible_sims,rec.total_sims,rec.new_activations],['Sep 2026','2026-09-25 15:48:40',4,7,1],'frozen record: cycle, SIM Group used, SIM counts');
+near(rec.pool_gb,255+PR4,'frozen pool = the computed pool',1e-9);
+const invLater={as_of:'2026-10-02 10:00:00',sims:g.rows.map(x=>x.iccid==='8991000000000000001'?Object.assign({},x,{lifecycle_state:'suspend'}):x)
+  .concat(V.parseFile(inv([`${E},1,2,TEST,M2M,915700000000030,404000000000030,~8991000000000000030,Gujarat,2026-09-01 10:00:00.000000,active,${DP},${DPB},,,,NULL`]),'g.csv').rows)};
+const dF=bd({inventory:invLater,snapshots:[inv25,invLater],frozen:{'Sep 2026':rec},months:{'Sep 2026':m},fleet});
+near(dF.pool.capacity_gb,255+PR4,'a newer SIM Group (a SIM suspended, a new SIM dated 1 Sep) does not change the frozen Sep pool',1e-9);
+ok(!!dF.pool.frozen&&dF.pool.frozen.snapshot_at==='2026-09-25 15:48:40','…the pool says it is frozen, and with which SIM Group');
+near(bd({inventory:invLater,snapshots:[invLater],months:{'Sep 2026':m},fleet}).pool.capacity_gb,2*85+PR4+85/30*21,'(without the freeze the newer file would have changed it)',1e-9);
+Object.assign(V.state,{today:TODAY,inventory:invLater,snapshots:[inv25,invLater],months:{'Sep 2026':m,'Oct 2026':V.mergeMonth(null,{itemized:d2},'Oct 2026')},frozen:{},pendingFreeze:[]});
+V.rebuild({silent:true});
+eq([Object.keys(V.state.frozen),V.state.frozen['Sep 2026'].snapshot_at],[['Sep 2026'],'2026-09-25 15:48:40'],'auto-freeze: the closed Sep cycle is frozen with the 25 Sep SIM Group (the first after 21 Sep), the open Oct cycle is not');
+eq(V.takePendingFreeze().map(x=>[x.rec.reporting_period,x.force]),[['Sep 2026',false]],'…queued once for saving (never overwriting a saved one)');
+eq(V.recomputeCycle('Oct 2026').ok,false,'an open cycle cannot be recomputed — it is live');
+const rc=V.recomputeCycle('Sep 2026');
+eq([rc.ok,V.takePendingFreeze().map(x=>x.force)],[true,[true]],'admin recompute of a closed cycle overwrites the saved one');
+Object.assign(V.state,{today:null,inventory:null,snapshots:[],months:{},frozen:{},pendingFreeze:[],asOf:null});
+
+group('pool used = the newest report (decided 6 Oct 2026); Real-time tab and daily charts stay on the Itemized report');
+eq([ds.pool.usage_src,ds.pool.data_date],['itemized','2026-09-21'],'Summary and Itemized both reach 21 Sep → the Itemized report');
+const dNa22=bd({inventory,months:{'Sep 2026':mU2},fleet,asOf:'2026-08-22'});
+eq([dNa22.pool.usage_src,Math.round(dNa22.pool.used_gb*100)/100],['itemized',41.25],'a past "as of" day → the Itemized days, even with a newer Summary (22 Aug: 41.25 GB)');
+const dN=bd({inventory,months:{'Sep 2026':mU2},fleet});                 // Itemized to 23 Aug, Summary to 21 Sep
+eq([dN.pool.usage_src,dN.pool.data_date,dN.pool.daily_until],['summary','2026-09-21','2026-08-23'],'the Summary reaches later (21 Sep vs 23 Aug) → pool used from the Summary');
+near(dN.pool.used_gb,88,'…used = the Summary of the pool SIMs (1 + 1 + 86 GB)',1e-6);
+near(dN.rtRows.reduce((a,r)=>a+r.used_mb,0)/1024,81.25,'…the Real-time tab keeps the Itemized report (to 23 Aug: 81.25 GB)',1e-6);
+ok(dN.pool.alerts.some(a=>a.code==='daily_older'&&/23 Aug 2026/.test(a.text)),'…and says the daily figures are older (Itemized to 23 Aug)');
+const dNa=bd({inventory,months:{'Sep 2026':mU2},fleet,asOf:'2026-08-23'});
+eq([dNa.asOf,dNa.pool.usage_src,Math.round(dNa.pool.used_gb*100)/100],['2026-08-23','itemized',81.25],'…picking the last Itemized day (23 Aug) shows that day, not the newer Summary');
+eq([V.latestUsage({'Sep 2026':mU2}).src,V.latestUsage({'Sep 2026':mU2}).until],['summary','2026-09-21'],'latest view: the Summary to 21 Sep');
+const SO=sum([`${E},1,915700000000001,404000000000001,~8991000000000000001,1130499,2097152.0000,GUJ_HOME,2026-10-04 10:00:00,10`]);
+const dNC=bd({inventory,months:{'Sep 2026':mI,'Oct 2026':V.mergeMonth(null,{summary:V.parseFile(SO,'s.csv')},'Oct 2026')},fleet});
+eq([dNC.poolMonth,dNC.rtMonth,dNC.pool.usage_src,dNC.pool.data_date,Math.round(dNC.pool.used_gb)],['Oct 2026','Sep 2026','summary','2026-10-04',2],'a Summary of a newer cycle → the pool shows that cycle; the Real-time tab stays on the last Itemized cycle');
+eq([dNC.pool.days_elapsed,dNC.pool.days_total],[13,30],'…pace from the Summary\'s day (4 Oct = day 13 of 30)');
+
+group('go-live from the Summary when there are no daily figures for those days');
+const s28r={as_of:'2026-09-28 13:56:32',sims:s25.sims}, s06={as_of:'2026-10-06 14:12:43',sims:s28.sims};
+const SG=d=>sum([`${E},1,915700000000021,404000000000021,~8991000000000000021,1130499,1048576.0000,GUJ_HOME,2026-10-05 10:00:00,${d}`]);
+const mS3=V.mergeMonth(null,{summary:V.parseFile(SG(3),'s.csv')},'Oct 2026');
+const aS=bd({inventory:s06,snapshots:[s28r,s06],months:{'Oct 2026':mS3},fleet}).pool.sim_table.find(r=>r.iccid==='8991000000000000021');
+eq([aS.start,aS.src,aS.how],['2026-10-03','detected','summary'],'Ready on 28 Sep, active on 6 Oct, Summary: last session 5 Oct, 3 session days → started no later than 3 Oct');
+near(aS.alloc_gb,85/30*19,'…3 Oct – 21 Oct = 19 days × 2.83 GB',1e-9);
+const aS2=bd({inventory:s06,snapshots:[s28r,s06],months:{'Oct 2026':V.mergeMonth(null,{summary:V.parseFile(SG(20),'s.csv')},'Oct 2026')},fleet}).pool.sim_table.find(r=>r.iccid==='8991000000000000021');
+eq([aS2.start,aS2.how],['2026-09-28','summary'],'…never before the Ready file (20 session days would mean 16 Sep → 28 Sep)');
+const mS3i=V.mergeMonth(mS3,{itemized:V.parseFile([ITO.replace('2026-09-25,2026-09-26','2026-10-01,2026-10-02'),`${E},1,915700000000021,404000000000021,~8991000000000000021,1130499,${B(1)},NULL,1048576.0000,GUJ_HOME,2026-10-01 10:00:00,1`].join('\n'),'i.csv')},'Oct 2026');
+eq(bd({inventory:s06,snapshots:[s28r,s06],months:{'Oct 2026':mS3i},fleet}).pool.sim_table.find(r=>r.iccid==='8991000000000000021').how,'first_use','daily figures (Itemized) for those days win over the Summary bound');
+
+group('review fixes (adversarial review, 6 Oct 2026)');
+// the earlier of the two bounds wins: a later cycle's daily first use must not override an earlier Summary bound
+const s15={as_of:'2026-09-15 10:00:00',sims:s25.sims}, s05={as_of:'2026-10-05 10:00:00',sims:s28.sims};
+const mSep21=V.mergeMonth(null,{summary:V.parseFile(sum([`${E},1,915700000000021,404000000000021,~8991000000000000021,1130499,1048576.0000,GUJ_HOME,2026-09-21 20:00:00,4`]),'s.csv')},'Sep 2026');
+const ITO2=ITO.replace('2026-09-25,2026-09-26','2026-09-22,2026-09-23');
+const mOct21=V.mergeMonth(null,{itemized:V.parseFile([ITO2,`${E},1,915700000000021,404000000000021,~8991000000000000021,1130499,${B(1)},${B(1)},2097152.0000,GUJ_HOME,2026-09-23 10:00:00,2`].join('\n'),'i.csv')},'Oct 2026');
+const fr21=V.freezeRecord('Sep 2026',s05,[s15,s05],{'Sep 2026':mSep21,'Oct 2026':mOct21}).sims['8991000000000000021'];
+eq([fr21.start,fr21.how,fr21.eligible],['2026-09-18','summary',true],'Sep Summary bound (21 Sep − 4 + 1 = 18 Sep) beats the Oct daily first use (22 Sep): the SIM counts in the Sep pool');
+near(fr21.gb,85/30*4,'…18–21 Sep = 4 days × 2.83 GB',1e-9);
+// the Summary's own session figures stay apart from the merged (Itemized) ones
+const SS2=sum([`${E},1,915700000000021,404000000000021,~8991000000000000021,1130499,1048576.0000,GUJ_HOME,2026-10-05 20:00:00,10`]);
+const ITO3=['E_CODE,ACCOUNTID,MSISDN,IMSI,ICCID,CIRCLE,2026-10-03,2026-10-04,2026-10-05,TOTAL_USAGE:Data-KiloBytes/Voice-Seconds/SMS-Count,ORIGIN_CIRCLE,Last_Packet_Switched_Session_End,Packet_Switched_Session_Days',
+  `${E},1,915700000000021,404000000000021,~8991000000000000021,1130499,${B(1)},${B(1)},${B(1)},3145728.0000,GUJ_HOME,2026-10-05 20:00:00,3`].join('\n');
+const mBoth=V.mergeMonth(V.mergeMonth(null,{summary:V.parseFile(SS2,'s.csv')},'Oct 2026'),{itemized:V.parseFile(ITO3,'i.csv')},'Oct 2026');
+eq([mBoth.rows[0].session_days,mBoth.rows[0].summary_days],[3,10],'merged row: session days from the Itemized report; the Summary\'s own (10) kept apart');
+const mBoth2=V.mergeMonth(V.mergeMonth(null,{itemized:V.parseFile(ITO3,'i.csv')},'Oct 2026'),{summary:V.parseFile(SS2,'s.csv')},'Oct 2026');
+eq(mBoth2.rows[0].summary_days,10,'…in either upload order');
+const s25b={as_of:'2026-09-25 15:48:40',sims:s25.sims}, s05b={as_of:'2026-10-05 22:00:00',sims:s28.sims};
+const gB=bd({inventory:s05b,snapshots:[s25b,s05b],months:{'Oct 2026':mBoth},fleet}).pool.sim_table.find(r=>r.iccid==='8991000000000000021');
+eq([gB.start,gB.how],['2026-09-26','summary'],'Summary bound (5 Oct − 10 + 1 = 26 Sep) beats a later Itemized first use (3 Oct) from a report covering only 3–5 Oct');
+// no-vehicle rows: a non-counting SIM with Summary usage is listed; one with only Itemized usage is not
+const GX=inv([`${E},1,2,TEST,M2M,915700000000012,404000000000012,~8991000000000000012,Gujarat,2026-08-01 10:00:00.000000,Ready,${RD},CMP_Vi_IOT_READY_0,,,,NULL`,
+  `${E},1,2,TEST,M2M,915700000000013,404000000000013,~8991000000000000013,Gujarat,2026-08-01 10:00:00.000000,Dunning,${DP},${DPB},,,,NULL`]);
+const mX=V.mergeMonth(V.mergeMonth(null,{summary:V.parseFile(sum([`${E},1,915700000000012,404000000000012,~8991000000000000012,1130499,1048576.0000,GUJ_HOME,2026-09-20 10:00:00,2`]),'s.csv')},'Sep 2026'),
+  {itemized:V.parseFile(it([`${E},1,915700000000013,404000000000013,~8991000000000000013,1130499,${B(1)},NULL,NULL,1048576.0000,GUJ_HOME,2026-08-22 10:00:00,1`]),'i.csv')},'Sep 2026');
+const dX=bd({inventory:{as_of:'2026-09-25 10:00:00',sims:V.parseFile(GX,'g.csv').rows},months:{'Sep 2026':mX},fleet});
+eq(dX.CD.vehicles.map(v=>[v.reg,v.plan,v.used_gb]),[['No vehicle · 915700000000012','',1]],'a Ready SIM with Summary usage and no vehicle is listed (no plan); a Dunning SIM with only Itemized usage is not');
+// two SIMs sharing a mobile no. (a SIM swap) get distinct row keys
+const GD=inv([`${E},1,2,TEST,M2M,915700000000014,404000000000014,~8991000000000000014,Gujarat,2026-08-01 10:00:00.000000,active,${DP},${DPB},,,,NULL`]);
+const SD=sum([`${E},1,915700000000014,404000000000099,~8991000000000000099,1130499,1048576.0000,GUJ_HOME,2026-09-20 10:00:00,2`]);
+const dD=bd({inventory:{as_of:'2026-09-25 10:00:00',sims:V.parseFile(GD,'g.csv').rows},months:{'Sep 2026':V.mergeMonth(null,{summary:V.parseFile(SD,'s.csv')},'Sep 2026')},fleet});
+eq(dD.CD.vehicles.map(v=>v.reg).sort(),['No vehicle · 915700000000014 · 8991000000000000014','No vehicle · 915700000000014 · 8991000000000000099'],'two SIMs sharing a mobile no. get distinct rows (mobile no. + ICCID)');
+// a Summary without a last-session column: the export date from the file name; no date at all → an open cycle is not "complete"
+const SN=['E_CODE,ACCOUNT_ID,MSISDN,IMSI,ICCID,CIRCLE,TOTAL_USAGE:Data-kiloBytes/Voice-Seconds/SMS-Count',`${E},1,915700000000001,404000000000001,~8991000000000000001,1130499,31457280.0000`].join('\n');
+eq(V.mergeMonth(null,{summary:V.parseFile(SN,'SELFCARE_USAGE_SUMMARY_1_X_20261003101500.csv')},'Oct 2026').summary_asof,'2026-10-03','a Summary without a last-session column takes its export date');
+const pNd=bd({inventory,months:{'Oct 2026':V.mergeMonth(null,{summary:V.parseFile(SN,'s.csv')},'Oct 2026')},fleet}).pool;
+eq([pNd.complete,pNd.days_elapsed,pNd.rec.type],[false,15,'healthy'],'…and with no date at all an open cycle is not taken as complete (today = day 15; no idle advice)');
+
+group('SIM Group ↔ usage reconciliation, status table, SIM-wise table, alerts, trend');
+eq((({inventory_sims,usage_sims,matched,inventory_no_usage,eligible_no_usage,usage_no_inventory,usage_non_eligible,no_vehicle})=>[inventory_sims,usage_sims,matched,inventory_no_usage,eligible_no_usage,usage_no_inventory,usage_non_eligible,no_vehicle])(P.recon),[7,3,3,4,1,0,0,2],'7 in the SIM Group · 3 with usage · 3 matched · 4 without usage (1 of them counts) · 0 unmatched · 2 pool SIMs without a vehicle');
+ok(P.alerts.some(a=>a.code==='no_vehicle'&&/^2 SIM/.test(a.text)),'pool SIMs without a vehicle number are flagged, with what to do');
+eq(P.status_table.map(r=>[r.state,r.sims,r.rule,r.pool_sims]),[['active',4,true,4],['Ready',1,false,0],['Dunning',1,false,0],['suspend',1,false,0]],'status table: raw states, rule, SIMs in the pool');
+eq([P.sim_table.length,P.sim_table.filter(r=>r.in_pool).length,P.sim_table.find(r=>r.iccid==='8991000000000000005').reason],[7,4,'"Ready" is not counted in the pool'],'SIM-wise table: every SIM, and why a SIM does not count');
+eq([dsA.pool.level,dsA.pool.alerts[0].level,dsA.pool.alerts[0].code,dsA.pool.forecast.why],['warning','warning','pool_warning',['projected_over_early']],'as of 23 Aug (day 2): on pace far over the pool, but Critical needs 3 days of data — one heavy start is a Warning');
+ok(dsOct.pool.alerts.some(a=>a.code==='stale_usage'&&/22 Sep 2026/.test(a.text)),'open cycle with old Itemized data (ends 22 Sep, today 6 Oct) → stale-data warning');
+eq(ds.trend.map(t=>[t.label,t.sims,t.source,Math.round(t.used_gb)]),[['Sep 2026',4,'itemized',88]],'trend: one row per cycle, used from the newest report (same day → the Itemized report)');
+near(ds.trend[0].pool_gb,255+PR4,'trend pool = the cycle\'s pool',1e-9);
+
+group('shared-pool forecast (Oct 2026 cycle 22 Sep – 21 Oct = 30 days; pool 4 × 85 = 340 GB)');
+const keepRules=V.rulesConfig();
+const sRow=(n,g,last,days=5)=>`${E},1,9157000000000${n},4040000000000${n},~89910000000000000${n},1130499,${(g*1048576).toFixed(4)},GUJ_HOME,${last} 10:00:00,${days}`;
+const sumOct=(gbs,last)=>V.mergeMonth(null,{summary:V.parseFile(sum(gbs.map((g,i)=>sRow('0'+(i+1),g,last))),'s.csv')},'Oct 2026');
+const fcd=(gbs,last,extra)=>bd(Object.assign({inventory,months:{'Oct 2026':sumOct(gbs,last)},fleet},extra||{}));
+const fc=(gbs,last,extra)=>fcd(gbs,last,extra).pool;
+const fH=fc([25,25,25,25],'2026-10-05');
+eq([fH.level,fH.forecast.days_elapsed,fH.forecast.days_left,fH.forecast.exhaustion_date,fH.forecast.backup_gb,fH.forecast.why],['healthy',14,16,null,0,[]],'100 GB by 5 Oct (day 14): 214 GB projected of 340 → Healthy, no exhaustion, no backup');
+near(fH.forecast.avg_gb_day,100/14,'requirement figure: average a day = used ÷ days elapsed (100 ÷ 14)',1e-9);
+near(fH.forecast.req.projected_gb,100/14*30,'requirement figure: projected = average × 30 cycle days',1e-9);
+eq([fH.forecast.pace.basis,fH.forecast.pace.sims_now,fH.forecast.pace.sd_elapsed,fH.forecast.pace.sd_left],['cycle',4,56,64],'per-SIM pace: 4 SIMs live all cycle → 56 SIM-days so far, 64 to come');
+near(fH.forecast.pace.gb_sim_day,100/56,'pace per SIM a day = 100 GB ÷ 56 SIM-days',1e-9);
+near(fH.forecast.projected_gb,100/14*30,'same SIMs all cycle → the per-SIM projection equals average × 30 (nothing changes for a steady fleet)',1e-9);
+const fW=fc([40,40,35,35],'2026-10-05');
+eq([fW.level,fW.forecast.why,fW.alerts.some(a=>a.code==='pool_warning')],['warning',['projected_high'],true],'150 GB by day 14 → 321 GB projected = 94.5% ≥ 90% → Warning');
+const fC=fc([50,50,40,35],'2026-10-05'), F=fC.forecast;
+eq([fC.level,F.why,F.exhaustion_date,F.confirmed],['warning',['projected_over_unconfirmed'],'2026-10-19',false],'175 GB by day 14 → 375 GB projected > 340 on the FIRST data day → Warning (Critical needs 2 data days in a row); runs out ~19 Oct');
+ok(/19 Oct 2026/.test(fC.rec.text)&&/40 GB/.test(fC.rec.text)&&/next upload/.test(fC.rec.text),'…the advice names the run-out day, the backup and that the next upload decides Critical');
+const prevOver=(asOf,used,proj)=>({reporting_period:'Oct 2026',as_of:asOf,source:'summary',used_gb:used,pool_gb:340,projected_gb:proj});
+const fC2=fc([50,50,40,35],'2026-10-05',{poolSnaps:[prevOver('2026-10-04',160,370)]}), F2=fC2.forecast;
+eq([fC2.level,F2.why,F2.exhaustion_date,F2.confirmed,F2.prev.as_of,fC2.alerts[0].code],['critical',['projected_over'],'2026-10-19',true,'2026-10-04','pool_critical'],'…the previous data day (4 Oct) was over the pool too → Critical');
+near(F2.pace.gb_sim_day,175/56,'pace 175 GB ÷ 56 SIM-days = 3.125 GB per SIM a day',1e-9);
+near(F2.pace.burn_gb_day,12.5,'current pace = 3.125 × 4 SIMs = 12.5 GB a day',1e-9);
+near(F2.lasts_days,165/12.5,'pool lasts = remaining 165 ÷ 12.5 a day = 13.2 days',1e-9);
+near(F2.gap_days,16-13.2,'gap = 16 days left − 13.2 = 2.8 days before the cycle ends',1e-9);
+near(F2.shortfall_gb,35,'shortfall = projected 375 − pool 340 = 35 GB',1e-9);
+eq(F2.backup_gb,40,'backup = 35 × 1.10 = 38.5 → rounded up to 10 GB = 40 GB');
+ok(/19 Oct 2026/.test(fC2.rec.text)&&/40 GB/.test(fC2.rec.text)&&/per SIM/.test(fC2.rec.text),'recommendation names the run-out day, the backup and the per-SIM pace');
+eq(fc([50,50,40,35],'2026-10-05',{poolSnaps:[prevOver('2026-10-04',150,320)]}).level,'warning','…a previous data day within the pool does not confirm it → still Warning');
+const fU=fc([90,90,90,75],'2026-10-05');
+eq([fU.level,fU.forecast.why,fU.forecast.exhaustion_date],['critical',['used_up'],'2026-10-05'],'345 of 340 GB used → Critical (used up) at once, on the data day');
+const fR=fc([75,75,75,75],'2026-10-05');
+eq([fR.level,fR.forecast.why,fR.forecast.exhaustion_date],['critical',['runs_out_soon'],'2026-10-07'],'300 of 340 GB used, 21.4 GB a day → runs out 7 Oct (within 3 days) → Critical at once, no confirmation needed');
+const fE=fc([10,10,10,10],'2026-09-23'), fE3=fc([15,15,15,15],'2026-09-24');
+eq([fE.level,fE.forecast.why,fE3.level,fE3.forecast.why],['warning',['projected_over_early'],'warning',['projected_over_unconfirmed']],'600 GB projected after 2 days → Warning (too early); after 3 days still Warning until a second data day confirms it');
+const fE3c=fc([15,15,15,15],'2026-09-24',{poolSnaps:[prevOver('2026-09-23',40,600)]});
+eq([fE3c.level,fE3c.forecast.why],['critical',['projected_over']],'…with 23 Sep also over the pool → Critical on day 3');
+// one heavy day: 13 days × 6 GB + one 60 GB day — counted once, not carried forward (requirement §28)
+const dts=[];for(let x='2026-09-22';x<='2026-10-05';x=V.addDays(x,1))dts.push(x);
+const itHead=`E_CODE,ACCOUNTID,MSISDN,IMSI,ICCID,CIRCLE,${dts.join(',')},TOTAL_USAGE:Data-KiloBytes/Voice-Seconds/SMS-Count,ORIGIN_CIRCLE,Last_Packet_Switched_Session_End,Packet_Switched_Session_Days`;
+const itOct=(gbOf,tot)=>V.mergeMonth(null,{itemized:V.parseFile([itHead,`${E},1,915700000000001,404000000000001,~8991000000000000001,1130499,${dts.map((x,i)=>B(gbOf(i))).join(',')},${tot*1048576}.0000,GUJ_HOME,2026-10-05 10:00:00,14`].join('\n'),'i.csv')},'Oct 2026');
+const fS=bd({inventory,months:{'Oct 2026':itOct(i=>i<13?6:60,138)},fleet}).pool, SP=fS.forecast.pace;
+eq([fS.level,fS.forecast.why,SP.basis,SP.spike.date],['warning',['spike'],'itemized','2026-10-05'],'a 60 GB day (10× a normal day) is not Critical — a Warning that one unusually heavy day happened');
+near(SP.spike.excess_gb,60-1.5*4,'…its excess over a normal day (60 − 1.5 × 4 SIMs = 54 GB) is counted once in used, not carried forward',1e-9);
+near(SP.gb_sim_day,1.5,'…so the pace stays 1.5 GB per SIM a day',1e-9);
+near(fS.forecast.projected_gb,138+1.5*64,'projected = 138 used + 1.5 × 64 SIM-days = 234 GB (69%)',1e-9);
+const fS2=bd({inventory,months:{'Oct 2026':itOct(i=>i===1?24:i===13?15:6,111)},fleet}).pool.forecast.pace;
+eq([fS2.spike.date,fS2.gb_sim_day],['2026-10-05',1.5],'an older, bigger heavy day (23 Sep, outside the 7-day window) does not hide a newer heavy day (5 Oct, 2.5×): the one inside the window is left out');
+// SIMs that do not count (here: missing from the SIM Group) used data lately: their days are taken out of the pool's daily figures
+const itRows=rows=>V.mergeMonth(null,{itemized:V.parseFile([itHead].concat(rows).join('\n'),'i.csv')},'Oct 2026');
+const itR=(n,gbOf,days)=>{const g=dts.map((x,i)=>gbOf(i)),tot=g.reduce((a,b)=>a+b,0);return `${E},1,9157000000000${n},4040000000000${n},~89910000000000000${n},1130499,${g.map(B).join(',')},${tot*1048576}.0000,GUJ_HOME,2026-10-05 10:00:00,${days}`;};
+const mOut=itRows([itR('01',()=>6,14),itR('99',i=>i>=9?30:0,5)]), k99=Object.keys(mOut.daily).find(k=>/99$/.test(k));
+const pO=bd({inventory,months:{'Oct 2026':mOut},fleet}).pool;
+near(pO.forecast.pace.gb_sim_day,1.5,'a SIM missing from the SIM Group used 30 GB a day since 1 Oct: its days are taken out of the pool\'s daily figures — the pace stays 1.5 GB per SIM a day',1e-9);
+eq([pO.level,pO.forecast.pace.jump,pO.alerts.some(a=>a.code==='not_in_group')],['healthy',null,true],'…no jump, Healthy; that SIM is flagged "not in the SIM Group"');
+const mOut2=Object.assign({},mOut,{daily:null}), dO2=bd({inventory,months:{'Oct 2026':mOut2},fleet});
+ok((dO2.needsDailySims.find(x=>x.label==='Oct 2026')||{iccids:[]}).iccids.includes(k99),'…a cycle loaded from the cloud (no per-SIM days in memory): that SIM\'s daily figures are asked for');
+ok(dO2.pool.forecast.pace.gb_sim_day>1.5,'…until they are here each day is scaled by the pool\'s share of the cycle (a higher pace)');
+near(bd({inventory,months:{'Oct 2026':Object.assign({},mOut2,{dailySims:{[k99]:mOut.daily[k99]}})},fleet}).pool.forecast.pace.gb_sim_day,1.5,'…once loaded: the same pace as with the whole report in memory (every viewer sees the same)',1e-9);
+eq([fS.high.count,fS.high.list[0].iccid],[1,'8991000000000000001'],'…and that SIM is a high-usage SIM (138 GB in 14 days ≈ 348% of 2.83 GB a day)');
+// a jump that lasts: the newest 2 days both at 7.5 GB per SIM a day (5× the usual) — used for the forecast at once
+const fJ=bd({inventory,months:{'Oct 2026':itOct(i=>i<12?6:30,132)},fleet}).pool, JP=fJ.forecast.pace;
+eq([JP.basis,JP.jump.from,JP.jump.to,fJ.forecast.exhaustion_date,fJ.level,fJ.forecast.why],['jump','2026-10-04','2026-10-05','2026-10-12','warning',['projected_over_unconfirmed']],'two days in a row at 5× → the jump is the pace: runs out 12 Oct (the cycle average would say no run-out at all)');
+near(JP.gb_sim_day,7.5,'…7.5 GB per SIM a day (30 GB ÷ 4 SIMs)',1e-9);
+near(fJ.forecast.projected_gb,132+7.5*64,'…projected 132 + 7.5 × 64 = 612 GB',1e-9);
+ok(fJ.forecast.req.projected_gb<340,'…while the requirement\'s cycle average (132 ÷ 14 × 30 = 283 GB) stays under the pool');
+// pace between uploads of the Summary: like with like (an Itemized point the same day is ignored)
+const sn=(src,u)=>({reporting_period:'Oct 2026',as_of:'2026-10-03',source:src,used_gb:u}), other={reporting_period:'Sep 2026',as_of:'2026-10-04',source:'summary',used_gb:0};
+const rp1=fc([25,25,25,25],'2026-10-05',{poolSnaps:[sn('itemized',90),sn('summary',60),other]}).forecast, rp2=fc([25,25,25,25],'2026-10-05',{poolSnaps:[sn('summary',60),sn('itemized',90)]}).forecast;
+eq([rp1.pace.jump,rp1.level,rp2.level],[null,'healthy','healthy'],'Summary uploads 3 → 5 Oct: one 2-day interval at 5 GB per SIM a day is NOT a jump yet (it may hold one heavy day) — whatever the load order');
+near(rp1.pace.gb_sim_day,100/56,'…the 7+ day window (the whole cycle so far) decides: 100 ÷ 56 SIM-days',1e-9);
+const rpJ=fc([25,25,25,25],'2026-10-05',{poolSnaps:[sn('summary',60),Object.assign(sn('summary',80),{as_of:'2026-10-04'})]}).forecast;
+eq([rpJ.pace.basis,rpJ.pace.jump.from,rpJ.pace.gb_sim_day,rpJ.level,rpJ.why],['jump','2026-10-04',5,'warning',['projected_over_unconfirmed']],'uploads on 3, 4 and 5 Oct: two separate days at 5 GB per SIM a day (≥ 25% above the window) → a jump that lasts → 420 GB projected → Warning');
+eq(fc([25,25,25,25],'2026-10-05',{poolSnaps:[sn('itemized',90)]}).level,'healthy','…only an Itemized point that day → not used for a Summary figure → Healthy');
+// an upload evaluated over another set of SIMs is left out of the pace (a SIM left the pool, a status rule changed)
+const rpX=fc([25,25,25,25],'2026-10-05',{poolSnaps:[Object.assign(sn('summary',60),{pool_gb:425}),Object.assign(sn('summary',80),{as_of:'2026-10-04',pool_gb:425})]}).forecast;
+eq([rpX.pace.basis,rpX.pace.jump,rpX.level],['cycle',null,'healthy'],'uploads on 3 and 4 Oct were evaluated with 5 SIMs (pool 425 GB) and one no longer counts: their used figures cover other SIMs → left out; the whole cycle so far decides');
+near(rpX.pace.gb_sim_day,100/56,'…100 ÷ 56 SIM-days (with those two uploads it would be a jump to 5 GB per SIM a day)',1e-9);
+// each evaluation keeps which SIMs it counted (number + order-free hash of those started by its data day)
+const keepSnaps2=V.state.poolSnaps;V.state.poolSnaps=[];
+const fp3=V.poolSnapshotRow(fcd([15,15,15,15],'2026-10-03')), fp4=V.poolSnapshotRow(fcd([20,20,20,20],'2026-10-04'));
+V.state.poolSnaps=keepSnaps2;
+eq([fp3.counted.n,typeof fp3.counted.h,fp3.counted.h===fp4.counted.h],[4,'number',true],'each evaluation keeps which SIMs it counted: 4 SIMs (+ a hash of their ICCIDs — the same SIMs on 3 and 4 Oct)');
+const rpF=fc([25,25,25,25],'2026-10-05',{poolSnaps:[fp3,fp4]}).forecast;
+eq([rpF.pace.basis,rpF.pace.jump&&rpF.pace.jump.from],['jump','2026-10-04'],'…the same SIMs → those uploads are used (3 → 4 → 5 Oct: 5 GB per SIM a day)');
+const rpG=fc([25,25,25,25],'2026-10-05',{poolSnaps:[Object.assign({},fp3,{counted:{n:4,h:(fp3.counted.h+1)%4294967296}}),Object.assign({},fp4,{counted:{n:5,h:fp4.counted.h}})]}).forecast;
+eq([rpG.pace.basis,rpG.pace.jump],['cycle',null],'…other SIMs (4 others, or 5) → left out, even with the same pool size');
+V.state.poolSnaps=[];
+eq([V.addPoolSnapshot(Object.assign({},fp3)),V.addPoolSnapshot(Object.assign({},fp3,{counted:null})),V.addPoolSnapshot(Object.assign({},fp3,{counted:{n:5,h:1}}))],[true,false,true],'a re-evaluation over other SIMs is a change (kept again); a row stored without `counted` (sql/004 not run) is not rewritten for it alone');
+V.state.poolSnaps=keepSnaps2;
+// a row stored without `counted`: its pool must fit today's SIMs — at least those started by its data day, at most all
+const O7=V.rulesConfig().ops, cy7={period_start:'2026-09-22',period_end:'2026-10-21'};
+const pool6=[85,85,85,85,85*16/30,85*16/30].map((gb,i)=>({gb,start:i<4?null:'2026-10-06'}));
+const sp7=V.simPace({pooled:pool6,curM:cy7,dataDay:'2026-10-07',used:120,cap:340+2*85*16/30,src:'summary',O:O7,
+  snaps:[{as_of:'2026-10-04',source:'summary',used_gb:80,pool_gb:340},{as_of:'2026-10-05',source:'summary',used_gb:90,pool_gb:430.67},{as_of:'2026-10-06',source:'summary',used_gb:100,pool_gb:425}]});
+eq([sp7.jump&&sp7.jump.from,sp7.jump&&sp7.jump.days],['2026-10-05',3],'rows without `counted`, growing fleet: 4 Oct (pool 340 = the 4 SIMs then) and 5 Oct (430.67 = with the 2 SIMs that start 6 Oct) fit today\'s SIMs → used; 6 Oct (425 — less than the 430.67 of the SIMs started by then) → left out');
+near(sp7.gb_sim_day,2.5,'…5 – 7 Oct ran 2.5 GB per SIM a day in both intervals → a jump that lasts',1e-9);
+// a heavy day inside an upload gap: daily uploads to 2 Oct (2.6 GB per SIM a day), then one upload for 3 – 5 Oct with 4 Oct at 3×
+const dayMarks=n=>Array.from({length:n},(_,i)=>({reporting_period:'Oct 2026',as_of:V.addDays('2026-09-25',i),source:'summary',used_gb:+(10.4*(i+4)).toFixed(2),pool_gb:340,projected_gb:300}));
+const hg=fc([41.6,41.6,41.6,41.6],'2026-10-05',{poolSnaps:dayMarks(8)}).forecast;
+eq([hg.level,hg.why,hg.pace.basis,hg.pace.jump,hg.pace.spike.from,hg.pace.spike.date,hg.pace.spike.days],['warning',['projected_high','average_over','spike'],'uploads',null,'2026-10-03','2026-10-05',3],'the 3 days of one upload can hold one heavy day (all their extra on one day = 3× a normal day) → left out like a single heavy day, not carried forward');
+near(hg.pace.gb_sim_day,2.6,'…the pace stays 2.6 GB per SIM a day (97.9% projected, not 111.9%)',1e-9);
+near(hg.pace.spike.peak_x,3,'…one of its days up to 3× a normal day',1e-9);
+const hg6=fc([44.2,44.2,44.2,44.2],'2026-10-06',{poolSnaps:dayMarks(8).concat({reporting_period:'Oct 2026',as_of:'2026-10-05',source:'summary',used_gb:166.4,pool_gb:340,projected_gb:380})}).forecast;
+eq([hg6.level,hg6.why],['warning',['projected_high','average_over','spike']],'next day normal: not over the pool — the same heavy day cannot make a second data day over it (no false Critical)');
+ok(/in the 3 days 3 Oct 2026 – 5 Oct 2026 of one upload/.test(fc([41.6,41.6,41.6,41.6],'2026-10-05',{poolSnaps:dayMarks(8)}).rec.text),'…the advice says the heavy day is somewhere in that upload\'s 3 days');
+V.setRules(Object.assign({},keepRules,{ops:Object.assign({},keepRules.ops,{warning_projected_pct:95,backup_margin_pct:20,backup_round_gb:25})}));
+eq([fc([40,40,35,35],'2026-10-05').level,fc([50,50,40,35],'2026-10-05').forecast.backup_gb],['healthy',50],'thresholds are configurable: Warning at 95% → 94.5% is Healthy; 20% margin, round to 25 GB → 35 × 1.2 = 42 → 50 GB');
+V.setRules(keepRules);
+eq([V.backupFor(451000,{backup_margin_pct:10,backup_round_gb:10}),V.backupFor(100,{backup_margin_pct:10,backup_round_gb:10}),V.backupFor(35,{backup_margin_pct:10,backup_round_gb:10})],[496100,110,40],'backup rounding: an exact multiple stays (451,000 × 1.1 = 496,100 — not 496,110; 100 → 110), otherwise up to the next 10 GB');
+// the cycle ended without its final report: no forecast or alert for it any more
+const fEnd=fc([25,25,25,25],'2026-10-20',{today:'2026-10-25'});
+eq([fEnd.level,fEnd.forecast.ended,fEnd.forecast.exhaustion_date,fEnd.forecast.backup_gb,fEnd.alerts.some(a=>a.code==='cycle_ended'),fEnd.rec.type],['closed',true,null,0,true,'ended'],'today 25 Oct, data to 20 Oct: the cycle is over (usage reset on 22 Oct) — closed, no run-out day, no backup');
+eq(fc([25,25,25,25],'2026-10-05',{issues:['The SIM Group history did not load (test)']}).alerts.filter(a=>a.code==='load_failed').map(a=>[a.level,a.text]),[['warning','The SIM Group history did not load (test)']],'what failed to load from the cloud this session is listed with the pool warnings');
+
+group('zero-usage SIMs (new < 3 days · long-term 30+ days without data) and high-usage SIMs');
+const gRow=(n,act)=>`${E},1,2,TEST,M2M,9157000000000${n},4040000000000${n},~89910000000000000${n},Gujarat,${act} 10:00:00.000000,active,${DP},${DPB},,,,NULL`;
+const invZ={as_of:'2026-10-06 10:00:00',sims:V.parseFile(inv([gRow('31','2026-10-05'),gRow('32','2026-08-01'),gRow('33','2026-09-20'),gRow('34','2026-08-01'),gRow('35','2026-08-01')]),'g.csv').rows};
+const monZ={'Sep 2026':V.mergeMonth(null,{summary:V.parseFile(sum([sRow('35',2,'2026-09-10',3)]),'s.csv')},'Sep 2026'),
+  'Oct 2026':V.mergeMonth(null,{summary:V.parseFile(sum([sRow('34',100,'2026-10-05',14)]),'s.csv')},'Oct 2026')};
+const Z=bd({inventory:invZ,months:monZ,fleet}).pool.zero;
+eq([Z.count,Z.new,Z.no_usage,Z.long_term,Z.cost],[4,1,2,1,1500],'4 pool SIMs used nothing this cycle: 1 new, 2 no usage, 1 long-term; ₹1,500 a month');
+eq(Z.list.map(z=>[z.iccid.slice(-2),z.category,z.idle_days,z.last_use]),[['32','long_term',65,null],['35','no_usage',25,'2026-09-10'],['33','no_usage',15,null],['31','new',0,null]],'per SIM, counted to the data day of the newest report (5 Oct): never used → days since its start; used before → days since the last use (10 Sep, in the Sep cycle)');
+ok(/consider stopping it before the next cycle \(starts 22 Oct 2026\)/.test(Z.list[0].action)&&!/clos(e|ed) automatically/i.test(Z.list[0].action),'long-term: review / consider stopping before the next cycle — advice only, nothing is closed');
+V.setRules(Object.assign({},keepRules,{ops:Object.assign({},keepRules.ops,{zero_long_days:20})}));
+eq(bd({inventory:invZ,months:monZ,fleet}).pool.zero.long_term,2,'long-term threshold is configurable (20 days → the SIM idle since 10 Sep joins)');
+V.setRules(keepRules);
+const HZ=bd({inventory:invZ,months:monZ,fleet}).pool.high;
+eq([HZ.count,HZ.list[0].iccid,HZ.list[0].days],[1,'8991000000000000034',14],'high usage: 100 GB in 14 days');
+near(HZ.list[0].pct,100/14/(85/30)*100,'…≈ 252% of its 2.83 GB a day (≥ 150%)',1e-9);
+
+group('SIM daily history: zero days shown, no-data days kept apart, averages, trend');
+const SD1=V.simDailyStats({daily:{'2026-09-22':1024,'2026-09-24':5120},from:'2026-09-22',to:'2026-09-26',covered:'2026-09-24',perDay:85/30,provisionalDay:'2026-09-24'});
+eq(SD1.days.map(x=>[x.date.slice(-2),x.gb,x.status]),[['22',1,'normal'],['23',0,'zero'],['24',5,'high'],['25',null,'no_data'],['26',null,'no_data']],'a day without usage inside the report is 0 GB (zero); days after the report are "no data", not zero');
+eq([SD1.total_gb,SD1.covered_days,SD1.active_days,SD1.zero_days,SD1.high_days,SD1.avg_calendar,SD1.avg_active,SD1.max.date,SD1.min.date,SD1.trend],[6,3,2,1,1,2,3,'2026-09-24','2026-09-23',null],'total 6 GB · 3 days with data · average 2 GB a calendar day, 3 GB an active day · highest 24 Sep, lowest 23 Sep (0) · no trend before 10 days');
+eq(SD1.days[2].provisional,true,'the newest day is marked "may still grow"');
+const dTr={};dts.forEach((x,i)=>{dTr[x]=i<7?1024:2048;});
+const SD2=V.simDailyStats({daily:dTr,from:'2026-09-22',to:'2026-10-05',covered:'2026-10-05',perDay:85/30});
+eq([SD2.trend.dir,SD2.trend.pct,SD2.trend.last,SD2.trend.prev],['up',100,2,1],'trend: last 7 days 2 GB a day vs 1 GB before → rising +100%');
+
+group('shared-pool alert: one open alert, updated in place — no spam');
+const fp=(level,o)=>({hasPool:true,level,usage_src:'summary',forecast:Object.assign({pool_gb:340,used_gb:150,remaining_gb:190,avg_gb_day:10.71,projected_gb:321.4,projected_pct:94.5,exhaustion_date:null,gap_days:0,shortfall_gb:0,backup_gb:0,data_day:'2026-10-05',cycle_end:'2026-10-21'},o||{})});
+const T=['2026-10-05T10:00:00Z','2026-10-06T10:00:00Z','2026-10-07T10:00:00Z','2026-10-08T10:00:00Z'];
+const o1=V.evaluatePoolAlert(fp('warning'),'Oct 2026',null,T[0]);
+eq(o1.map(x=>[x.op,x.popup,x.alert.level,x.alert.status,x.alert.code]),[['open',false,'warning','open',V.ALERT_CODE]],'Warning → one open alert (no popup)');
+const A1=Object.assign({id:'a1'},o1[0].alert);
+eq(V.evaluatePoolAlert(fp('warning'),'Oct 2026',A1,T[1]),[],'same figures again → nothing new (no repeat alert)');
+eq(V.evaluatePoolAlert(fp('warning',{used_gb:155}),'Oct 2026',A1,T[1]).map(x=>[x.op,x.popup,x.alert.id]),[['update',false,'a1']],'new figures → the same alert is updated');
+const o3=V.evaluatePoolAlert(fp('critical',{used_gb:175,projected_pct:110.3}),'Oct 2026',A1,T[2]);
+eq(o3.map(x=>[x.op,x.popup,x.alert.level,x.alert.escalated_at,x.alert.first_detected]),[['update',true,'critical',T[2],T[0]]],'Warning → Critical escalates the same alert and pops up once');
+const A3=o3[0].alert;
+const o4=V.evaluatePoolAlert(fp('healthy',{pool_gb:425,projected_pct:80}),'Oct 2026',A3,T[3]);
+eq([o4.length,o4[0].op,o4[0].alert.status,o4[0].alert.resolved_at],[1,'resolve','resolved',T[3]],'back to Healthy → the alert is resolved');
+ok(/pool grew by 85 GB/.test(o4[0].alert.resolution_reason),'…with the reason (the pool grew by 85 GB)');
+const o5=V.evaluatePoolAlert(fp('critical'),'Oct 2026',Object.assign({},A3,{reporting_period:'Sep 2026'}),T[3]);
+eq(o5.map(x=>[x.op,x.alert.reporting_period,x.alert.status]),[['resolve','Sep 2026','resolved'],['open','Oct 2026','open']],'a new cycle: the old cycle\'s alert is resolved, a new one opens');
+ok(/Sep 2026 billing cycle ended — usage reset on 22 Sep 2026/.test(o5[0].alert.resolution_reason),'…reason: the cycle ended and usage reset');
+eq([V.evaluatePoolAlert(Object.assign(fp('critical'),{as_of:'2026-09-30'}),'Oct 2026',A3,T[3]),V.evaluatePoolAlert(fp('healthy'),'Oct 2026',null,T[3])],[[],[]],'a past "as of" day or a Healthy pool with no open alert → nothing');
+eq(V.evaluatePoolAlert(fp('closed'),'Oct 2026',A3,T[3]).map(x=>[x.op,x.alert.resolution_reason]),[['resolve','The billing cycle ended.']],'cycle complete → resolved');
+const keepSnaps=V.state.poolSnaps;V.state.poolSnaps=[];
+const pr=V.poolSnapshotRow(fcd([25,25,25,25],'2026-10-05'));
+eq([pr.reporting_period,pr.as_of,pr.source,pr.used_gb,pr.pool_gb,pr.level],['Oct 2026','2026-10-05','summary',100,340,'healthy'],'pool evaluation kept per cycle, data day and report');
+eq([V.addPoolSnapshot(pr),V.addPoolSnapshot(Object.assign({},pr)),V.addPoolSnapshot(Object.assign({},pr,{used_gb:101})),V.state.poolSnaps.length,V.state.poolSnaps[0].used_gb],[true,false,true,1,101],'same evaluation twice → kept once; a changed one replaces it');
+V.state.poolSnaps=keepSnaps;
+eq([V.localToday(new Date('2026-10-05T20:00:00Z')),V.localToday(new Date('2026-10-05T18:00:00Z'))],['2026-10-06','2026-10-05'],'"today" is the Indian date (20:00 UTC = 01:30 IST next day; 18:00 UTC = 23:30 IST)');
+
+group('fleet growth: the per-SIM pace counts SIMs that join mid-cycle (any fleet size)');
+// 4 SIMs all cycle + 16 SIMs that start on 6 Oct (day 15). Each SIM uses 3.2 GB a day (allocation 2.83).
+const growIds=['01','02','03','04'].concat(Array.from({length:16},(_,i)=>String(41+i)));
+const invG={as_of:'2026-10-06 10:00:00',sims:V.parseFile(inv(growIds.map((n,i)=>gRow(n,i<4?'2026-08-01':'2026-10-06'))),'g.csv').rows};
+const sumG=rows=>V.mergeMonth(null,{summary:V.parseFile(sum(rows),'s.csv')},'Oct 2026');
+const g5=bd({inventory:invG,months:{'Oct 2026':sumG(growIds.slice(0,4).map(n=>sRow(n,3.2*14,'2026-10-05',14)))},fleet}).pool;
+near(g5.capacity_gb,4*85+16*85/30*16,'pool = 4 × 85 + 16 SIMs × 16 days × 2.83 = 1,065.33 GB',1e-6);
+near(g5.forecast.req.projected_pct,(3.2*4*14)/14*30/g5.capacity_gb*100,'the cycle average says 36% (it has no usage for the 16 new SIMs yet)',1e-6);
+near(g5.forecast.projected_gb,3.2*4*14+3.2*(4*16+16*16),'per-SIM pace: 179.2 used + 3.2 × 320 SIM-days to come = 1,203.2 GB (113%)',1e-6);
+eq([g5.level,g5.forecast.why,g5.forecast.pace.new_sims],['warning',['projected_over_unconfirmed'],16],'the 4 SIMs with data already run over their own share (3.2 > 2.83 GB a day) — not "only the new SIMs"; first data day over the pool → Warning');
+near(g5.forecast.pace.new_alloc_gb,16*85/30*16,'…the new SIMs\' own allocation (16 × 16 days × 2.83) is kept apart for that check',1e-6);
+// over ONLY because of the new SIMs: 4 SIMs used little until 3 Oct, then 3.5 GB a day; 100 SIMs start 6 Oct
+const gRow3=(n,act)=>`${E},1,2,TEST,M2M,915700000000${n},404000000000${n},~8991000000000000${n},Gujarat,${act} 10:00:00.000000,active,${DP},${DPB},,,,NULL`;
+const invN={as_of:'2026-10-06 10:00:00',sims:V.parseFile(inv(['001','002','003','004'].map(n=>gRow3(n,'2026-08-01')).concat(Array.from({length:100},(_,i)=>gRow3(String(100+i),'2026-10-06')))),'g.csv').rows};
+const sRow3=(n,g)=>`${E},1,915700000000${n},404000000000${n},~8991000000000000${n},1130499,${(g*1048576).toFixed(4)},GUJ_HOME,2026-10-05 10:00:00,14`;
+const gN=bd({inventory:invN,months:{'Oct 2026':V.mergeMonth(null,{summary:V.parseFile(sum(['001','002','003','004'].map(n=>sRow3(n,8.5))),'s.csv')},'Oct 2026')},fleet,
+  poolSnaps:[{reporting_period:'Oct 2026',as_of:'2026-10-03',source:'summary',used_gb:6},{reporting_period:'Oct 2026',as_of:'2026-10-04',source:'summary',used_gb:20,pool_gb:4873.33,projected_gb:9999}]}).pool;
+eq([gN.level,gN.forecast.why,gN.forecast.pace.basis],['warning',['new_sims_unmeasured'],'jump'],'over the pool only because 100 SIMs with no data yet are counted at the fleet pace (the 4 with data use 76% of their own share) → Warning, even after a day over the pool');
+near(gN.forecast.pace.projected_measured_gb,34+3.5*64,'…the measured SIMs: 34 used + 3.5 × 64 = 258 GB of their 340 GB',1e-9);
+// next day: the 16 SIMs used data at the same pace; the 5 Oct evaluation was over the pool → Critical
+const g6=bd({inventory:invG,months:{'Oct 2026':sumG(growIds.map((n,i)=>sRow(n,i<4?3.2*15:3.2,'2026-10-06',i<4?15:1)))},fleet,
+  poolSnaps:[{reporting_period:'Oct 2026',as_of:'2026-10-05',source:'summary',used_gb:179.2,pool_gb:g5.capacity_gb,projected_gb:g5.forecast.projected_gb}]}).pool;
+eq([g6.level,g6.forecast.why,g6.forecast.exhaustion_date],['critical',['projected_over'],'2026-10-19'],'6 Oct: 20 SIMs measured, over the pool on 2 data days → Critical; runs out ~19 Oct');
+near(g6.forecast.pace.gb_sim_day,3.2,'pace = 3.2 GB per SIM a day',1e-9);
+ok(g6.forecast.req.projected_pct<50,'…while the cycle average (243 ÷ 15 × 30 = 486 GB, 46%) would still say Healthy');
+const g6Big=bd({inventory:invG,months:{'Oct 2026':sumG(growIds.map((n,i)=>sRow(n,i<4?3.2*15:3.2,'2026-10-06',i<4?15:1)))},fleet}).pool;
+eq(g6Big.alerts.some(a=>a.code==='pool_critical'),false,'…without the previous evaluation it is the first data day over the pool → Warning');
+
+group('shared-pool alert: much worse → pop-up again; previous data day kept for the "since last upload" line');
+const cA=V.evaluatePoolAlert(fp('critical',{exhaustion_date:'2026-10-21',backup_gb:620,data_day:'2026-10-05'}),'Oct 2026',null,T[0])[0];
+eq([cA.op,cA.popup,cA.alert.details.seq,cA.alert.details.announced.exhaustion_date],['open',true,1,'2026-10-21'],'new Critical: pop-up #1, its figures kept as announced');
+const cA1=Object.assign({id:'c1'},cA.alert);
+const w1=V.evaluatePoolAlert(fp('critical',{exhaustion_date:'2026-10-15',backup_gb:7510,data_day:'2026-10-06'}),'Oct 2026',cA1,T[1])[0];
+eq([w1.op,w1.popup,w1.worse,w1.alert.details.seq,w1.alert.details.prev.exhaustion_date,w1.alert.details.prev.backup_gb],['update',true,true,2,'2026-10-21',620],'runs out 21 → 15 Oct, backup 620 → 7,510 GB: pop-up #2; the previous data day\'s figures are kept');
+const w2=V.evaluatePoolAlert(fp('critical',{exhaustion_date:'2026-10-14',backup_gb:8000,data_day:'2026-10-07'}),'Oct 2026',w1.alert,T[2])[0];
+eq([w2.op,w2.popup,w2.alert.details.seq],['update',false,2],'1 day earlier and +7% backup: updated in place, no new pop-up');
+const w3=V.evaluatePoolAlert(fp('critical',{exhaustion_date:'2026-10-08',backup_gb:9000,remaining_gb:-5,data_day:'2026-10-08'}),'Oct 2026',w2.alert,T[3])[0];
+eq([w3.popup,w3.alert.details.seq,w3.alert.details.peak.exhaustion_date,w3.alert.details.peak.backup_gb,w3.alert.details.first.exhaustion_date],[true,3,'2026-10-08',9000,'2026-10-21'],'pool used up: pop-up #3; the worst and the first figures are kept for the history');
+const reord=d=>Object.fromEntries(Object.entries(d).reverse());
+eq(V.evaluatePoolAlert(fp('warning'),'Oct 2026',Object.assign({},A1,{details:reord(A1.details)}),T[1]),[],'details read back with their keys in another order (jsonb) → still no update');
+const legacy=Object.assign({},cA1,{details:Object.assign({},cA1.details,{announced:null,seq:undefined})});
+const lg=V.evaluatePoolAlert(fp('critical',{exhaustion_date:'2026-10-10',backup_gb:9000,data_day:'2026-10-06'}),'Oct 2026',legacy,T[1])[0];
+eq([lg.popup,lg.alert.details.announced.exhaustion_date],[false,'2026-10-10'],'an older Critical alert without announced figures: they are filled in, no surprise pop-up');
+const endA=V.evaluatePoolAlert(fEnd,'Oct 2026',cA1,T[3])[0];
+eq([endA.op,/without its final usage report/.test(endA.alert.resolution_reason)],['resolve',true],'the cycle ended without its final report → the alert is resolved with that reason');
+
+group('registry: providers, isolation, exports');
+eq(Providers.list().map(p=>p.code),['airtel','vi','jio'],'airtel, vi, jio registered');
+eq(Providers.select('jio'),false,'planned provider cannot be selected');
+Providers.register({code:'zz',name:'ZZ Test',short:'ZZ',color:'#9085e9',order:9});
+ok(Providers.list().some(p=>p.code==='zz'),'a new provider is added with a config object only');
+eq(Providers.normKey("'8991 0000 0000 0000 0001F"),'89910000000000000001','SIM keys normalised the same way for every provider');
+// ownership: Airtel keeps its own vehicles; a vehicle without Airtel usage whose SIM VI owns moves to VI
+const airtelCD={vehicles:[{reg:'A1',client:'Alpha',sim_no:'8991982200000000011',plan:'M2M 85GB',plan_gb:85,usage_pct:10},
+  {reg:'GJ01AA0001',client:'Alpha',sim_no:'8991000000000000001',plan:'',plan_gb:0,usage_pct:0}],stats:{},clients:['Alpha']};
+Providers.ingestAirtel(airtelCD,true,[]);
+Providers.setDataset('vi',ds);
+Providers.select('airtel');
+eq(VIEWS[VIEWS.length-1].CD.vehicles.map(v=>v.reg),['A1'],'Airtel view excludes the vehicle whose SIM belongs to VI');
+Providers.select('all');
+const all=VIEWS[VIEWS.length-1];
+eq(all.CD.vehicles.length,1+3+2,'All view = Airtel vehicles + VI vehicles (3 mapped + 2 without a vehicle), each once');
+ok(Providers.isMulti(),'All view with two providers is multi-provider');
+const pk=Providers.exportPack(['Reg','SIM'],all.CD.vehicles,v=>[v.reg,v.sim_no],[1]);
+eq([pk.headers[0],pk.sim[0],pk.rows[0][0]],['Provider',2,'Airtel'],'combined export gets a Provider column; SIM column index shifts');
+eq(Providers.exportName('drivebuddyai_vehicles','xlsx'),'drivebuddyai_vehicles_all-providers.xlsx','combined export file name');
+Providers.select('vi');
+eq(Providers.exportName('drivebuddyai_vehicles','xlsx'),'drivebuddyai_vehicles_vi.xlsx','VI export file name');
+eq(Providers.exportPack(['Reg'],[{reg:'x',provider:'vi'}],v=>[v.reg],[]).headers,['Reg'],'single-provider export has no Provider column');
+Providers.select('airtel');
+eq(Providers.exportName('drivebuddyai_vehicles','xlsx'),'drivebuddyai_vehicles.xlsx','Airtel keeps its original export name');
+eq(Providers.rtExportTag(),'','Airtel real-time export name unchanged');
+Providers.setDataset('vi',dsA); Providers.select('vi');
+eq(Providers.rtExportTag(),'_as-of-2026-08-23','VI real-time export name carries the as-of day');
+Providers.setDataset('vi',ds);
+eq(Providers.rtExportTag(),'','latest day → no tag');
+Providers.select('all');
+
+group('universal SIM search: every provider at once, the provider from the record, the status as reported');
+const S=window.SimSearch;
+eq([S.key(" 8991-0000 0000~0001F "),S.key("'8991 0000"),S.digits('+91 98765-43210')],['8991000000000001','89910000','919876543210'],'input normalised: spaces, hyphens, ~, apostrophes, trailing F padding — the stored number is never changed');
+eq([S.queryOf('+91 98765 43210').d,S.queryOf('GJ01AB1234').d],['919876543210',''],'mobile numbers / IMSIs are searched only when the input is a number (not the digits inside a vehicle number)');
+// Airtel: SIMs from Airtel's own reports only — monthly file (status) + real-time portal export (plan, mobile number)
+Providers.ingestAirtel({vehicles:[
+  {reg:'A1',client:'Alpha',hw_id:'HW-A1',sim_no:'8991982200000000011',plan:'M2M 85GB',plan_gb:85,used_gb:5,usage_pct:6,flag:'OK',sim_status:'Active'},
+  {reg:'A2',client:'Alpha',hw_id:'HW-A2',sim_no:'8991982200000000022',plan:'M2M 85GB',plan_gb:85,used_gb:0,usage_pct:0,flag:'NO DATA',sim_status:'Safe Custody'},
+  {reg:'GJ01AA0001',client:'Alpha',sim_no:'8991000000000000001',plan:'',plan_gb:0,usage_pct:0,sim_status:'N/A'}],stats:{},clients:['Alpha']},true,[]);
+Providers.ingestAirtelRt([{sim_no:'8991982200000000011',plan:'M2M 85GB',plan_gb:85,alloc_gb:85,used_gb:7,avail_gb:78,used_pct:8.2,msisdn:'919800000011'},
+  {sim_no:'8991982200000000099',plan:'M2M 20GB',plan_gb:20,alloc_gb:20,used_gb:0,avail_gb:20,used_pct:0,msisdn:'919800000099'}]);
+const AD=Providers.get('airtel').directory();
+eq(AD.map(r=>[r.iccid,r.lifecycle_state,r.msisdn]).sort(),[['8991982200000000011','Active','919800000011'],['8991982200000000022','Safe Custody',null],['8991982200000000099',null,'919800000099']],'Airtel SIMs = its monthly file + real-time portal export; status exactly as the monthly file says; none for a SIM only in the portal export (no status column there); the fleet SIM with no Airtel data is not claimed');
+const AC=Providers.get('airtel');
+const syncBefore=AC.directorySync(); Providers.setReady('airtel'); const syncAfter=AC.directorySync();
+Providers.ingestAirtelRt(Providers.raw('airtel').rtRows,{latest:false}); const syncOld=AC.directorySync();
+Providers.ingestAirtelRt(Providers.raw('airtel').rtRows,{latest:true});
+eq([syncBefore,syncAfter,syncOld,AC.directorySync()],[false,true,false,true],'Airtel\'s SIMs are written to the common SIM table only after its start-up load, and never while an older real-time snapshot is on screen');
+// VI: the newest SIM Group exactly as VI writes it
+const keepInv=V.state.inventory; V.state.inventory=inventory; Providers.setDataset('vi',ds);
+const vRes=S.memorySearch('8991 0000 0000 0000 005',20).results;
+eq(vRes.map(r=>[r.provider,r.iccid,r.lifecycle_state,r.status,r.rank]),[['vi','8991000000000000005','Ready','Ready',1]],'VI SIM: provider VI from its record, status "Ready" exactly as the SIM Group says (exact SIM match)');
+eq(S.memorySearch('8991000000000000006',5).results[0].lifecycle_state,'Dunning','…"Dunning" kept as VI writes it (never turned into "Inactive")');
+const aRes=S.memorySearch('8991-9822-0000-0000-022',20).results;
+eq(aRes.map(r=>[r.provider,r.lifecycle_state,r.rank]),[['airtel','Safe Custody',1]],'Airtel SIM found whatever provider is selected; hyphens ignored');
+eq(S.memorySearch('+91 98000 00099',5).results.map(r=>[r.provider,r.iccid,r.rank]),[['airtel','8991982200000000099',2]],'mobile number with +91 and spaces → exact mobile match (rank 2)');
+eq(S.memorySearch('404000000000003',5).results.map(r=>[r.provider,r.iccid,r.rank]),[['vi','8991000000000000003',3]],'IMSI → exact IMSI match (rank 3) — a 15-digit number is not read as a mobile number by its last 10 digits');
+eq(S.memorySearch('915700000000005',5).results.map(r=>[r.provider,r.iccid,r.rank]),[['vi','8991000000000000005',2]],'a 15-digit M2M mobile number typed in full → exact mobile match (rank 2)');
+eq(S.memorySearch('89919822',20).results.map(r=>[r.iccid,r.rank]),[['8991982200000000011',4],['8991982200000000022',4],['8991982200000000099',4]],'partial (start of the number) → every match listed, none opened automatically');
+eq(S.memorySearch('0000000022',20).results.map(r=>[r.iccid,r.rank]),[['8991982200000000022',5]],'partial (any part of the number) → "contains"');
+eq([S.memorySearch('899199999999999',20).results.length,S.memorySearch('899',20).too_short],[0,true],'unknown SIM → no result (no provider guessed); fewer than 4 digits → asks for more');
+eq(S.memorySearch('GJ01AA0001',20).results.length,0,'a vehicle number is not read as a mobile number');
+eq(S.fleetHits('gj01 aa 0001').map(v=>v.sim),['8991000000000000001'],'…it finds the vehicle (exact) and so its SIM');
+eq(S.vehicleOf({iccid:'8991982200000000011'}).reg,'A1','the vehicle of a SIM comes from the fleet (vehicle master)');
+// a future provider: a config with its SIM list — the search code is not touched
+Providers.register({code:'testjio',name:'Test Jio',short:'TJ',color:'#199e70',order:8,
+  directory:()=>[{iccid:'8991777000000000001',lifecycle_state:'Live',status:'Live'},{iccid:'8991982200000000011',lifecycle_state:'Suspended',status:'Suspended'}]});
+eq(S.memorySearch('8991777000000000001',5).results.map(r=>[r.provider,r.provider_name,r.lifecycle_state]),[['testjio','Test Jio','Live']],'a new provider is searchable as soon as it lists its SIMs — no change to the search');
+eq(S.memorySearch('8991982200000000011',5).results.map(r=>[r.provider,r.lifecycle_state,r.rank]),[['airtel','Active',1],['testjio','Suspended',1]],'the same number listed by two providers → both shown, each with its own status — never one picked');
+// database first; SIMs only this browser holds are added (sql/005 not run → the browser's SIMs alone)
+const keepCloud=window.ProviderCloud;
+window.ProviderCloud={searchSims:async()=>({results:[{provider:'airtel',provider_name:'Airtel',iccid:'8991982200000000011',lifecycle_state:'Active',status:'Active',rank:1,as_of:'2026-10-08 10:00:00'}],more:false,too_short:false})};
+const merged=await S.search('8991982200000000011',{limit:20});
+eq([merged.source,merged.results.map(r=>[r.provider,r.src])],['database',[['airtel','database'],['testjio','browser']]],'database results first; a SIM the database does not have yet (here the test provider) is added from this browser');
+window.ProviderCloud={searchSims:async()=>null,search:{reason:'Run sql/005_sim_search.sql'}};
+const local=await S.search('8991982200000000022',{limit:20});
+eq([local.source,local.results.map(r=>r.provider),local.reason],['browser',['airtel'],'Run sql/005_sim_search.sql'],'without sql/005 the search runs over the SIMs loaded in the browser, and says so');
+window.ProviderCloud=keepCloud; V.state.inventory=keepInv;
+
+document.getElementById('sum').innerHTML=fail?`<span class="f">${fail} failed</span>, ${pass} passed`:`<span class="p">All ${pass} passed</span>`;
+document.title=fail?`FAIL ${fail}`:`ALL PASS ${pass}`;
+})();
+</script>
+</body>
+</html>
