@@ -38,7 +38,12 @@
      • SIMs without a vehicle number are still listed in the month-wise
        tabs ("No vehicle · <mobile no.>") when they count or used data
      • a closed cycle is frozen with the first SIM Group exported on or
-       after its last day; newer SIM Groups do not change it
+       after its last day; newer SIM Groups do not change it. One from more
+       than 7 days after it is flagged, and the freeze waits 7 days for a
+       closer file
+     • an Itemized report that crosses the 22nd fills each billing cycle it
+       covers: the cycle of its "Data up to" day, and every earlier cycle it
+       has every day of
    ============================================================ */
 (function () {
   'use strict';
@@ -81,6 +86,11 @@
       zero_long_days: 30,                     // "long-term no usage" after 30+ days without data — candidates to stop next cycle
       high_pct: 150,                          // high-usage day / SIM: ≥ 150% of its daily allocation (analytical only)
       trend_pct: 15,                          // SIM trend: last 7 days vs the 7 before, ±15%
+      // SIM Group timing (14 Oct 2026). VI's DATE_OF_ACTIVATION stays the day a SIM was loaded on the account, so a cycle's
+      // start days are verified only by a SIM Group file from within 7 days either side of the cycle start; a closed cycle
+      // built from a SIM Group file more than 7 days after its end is flagged, and its freeze waits 7 days for a closer one
+      start_check_days: 7,
+      freeze_max_days: 7,
     },
   };
   const STATUS = { active: 'Active', ready: 'Ready', suspend: 'Suspended', suspended: 'Suspended',
@@ -367,14 +377,27 @@
     res.stats.dates = dcols.map(x => x.d);
     res.stats.last_data_date = lastDataDate || null;
     res.stats.max_last_session = maxLast || null;
-    // The dates decide the billing cycle. Usage resets on the 22nd, so a file that crosses it
-    // spans two cycles: only the days of the main cycle are used, and the upload says so.
+    // The dates decide the billing cycle. Usage resets on the 22nd, so a file that crosses it spans two or more cycles:
+    // each cycle gets its own days (14 Oct 2026, see itemizedCycles) — the newest one up to the "Data up to" day, and an
+    // earlier one when the file has every day of it. An earlier cycle the file covers only in part is left out.
     const cyc = new Map(); dcols.forEach(({ d }) => { const l = monthLabelForDate(d); cyc.set(l, (cyc.get(l) || 0) + 1); });
-    res.stats.cycles = [...cyc.entries()].map(([label, days]) => ({ label, days }));
-    res.suggestedMonth = dominantCycle(res.stats.dates);
+    res.stats.cycles = [...cyc.entries()].map(([label, days]) => { const c = cycleForLabel(label); return { label, days, complete: !!c && days >= c.days }; })
+      .sort((a, b) => window.Providers.monthKey(a.label) - window.Providers.monthKey(b.label));
+    res.suggestedMonth = monthLabelForDate(lastDataDate || res.stats.period_end);
     if (cyc.size > 1) res.warnings.unshift({ line: '-', field: 'dates', value: `${res.stats.period_start} → ${res.stats.period_end}`,
-      reason: `The dates cover ${cyc.size} billing cycles (${res.stats.cycles.map(c => `${c.label}: ${c.days} days`).join(', ')}). VI resets usage on the ${nth(CYCLE_START_DAY)}, so only the ${cyc.get(res.suggestedMonth)} days of ${res.suggestedMonth} are used — upload one file per billing cycle.` });
+      reason: `The dates cover ${cyc.size} billing cycles (${res.stats.cycles.map(c => `${c.label}: ${c.days} days${c.complete ? ', complete' : ''}`).join(', ')}). VI resets usage on the ${nth(CYCLE_START_DAY)}, so each cycle gets its own days; an earlier cycle the file covers only in part is not used.` });
     return res;
+  }
+  // The billing cycles one Itemized upload fills: the cycle of the "Data up to" day (main), and every earlier cycle the
+  // file has every day of (extra — a closed cycle's complete report). An earlier cycle covered only in part is skipped
+  // (its total would be too low); cycles after the "Data up to" day are left out with their days.
+  function itemizedCycles(parsed, until) {
+    const cs = (parsed && parsed.stats && parsed.stats.cycles) || [];
+    const main = until ? monthLabelForDate(until) : (parsed && parsed.suggestedMonth) || null;
+    const key = window.Providers.monthKey, mk = key(main);
+    const earlier = cs.filter(c => key(c.label) < mk);
+    return { main, extra: earlier.filter(c => c.complete).map(c => c.label), skipped: earlier.filter(c => !c.complete).map(c => c.label),
+      later: cs.filter(c => key(c.label) > mk).map(c => c.label) };
   }
 
   /* ── SIM inventory (SIMGROUP) ──────────────────────────────── */
@@ -619,6 +642,8 @@
     const after = snaps.find(s => dayOf(s) >= cyc.end);
     return after ? { snap: after, provisional: false } : { snap: latest, provisional: true };
   }
+  // Days between a closed cycle's last day and the SIM Group export it is built from (0 for an open cycle)
+  const lateDays = (cyc, at) => (cyc && at ? Math.max(0, dayDiff(cyc.end, dayOf(at))) : 0);
   // Summary rows per SIM: its latest session day and session days (several circles: the largest) — cached per month
   const sumIdx = new WeakMap();
   function summaryIndex(m) {
@@ -969,15 +994,32 @@
     else if (!poolAlloc) pool = { hasPool: false, states, needsInventory: true };
     else pool = computePool({ info, alloc: poolAlloc, curT: poolUse.t, curM: pm, asOfDate, poolDate, day: poolUse.until, today,
       invAsOf: inventory ? inventory.as_of : null, usage: poolUse, lastUse: lastUseMap(months),
-      snaps: (poolSnaps || []).filter(x => x.reporting_period === poolLabel), issues, missing: missingDaily });
+      snaps: (poolSnaps || []).filter(x => x.reporting_period === poolLabel), issues, missing: missingDaily, exportDays: snaps.map(dayOf) });
     const trend = cycleTrend(all, months, allocFor);
     const todayCycle = cycleForDate(today);
+    // What each part of the VI view covers — one description every label reads (14 Oct 2026): the current billing
+    // cycle, the pool's cycle and usage source, the Real-time tab's Itemized cycle, the month-wise (Summary) cycle.
+    // They can differ (e.g. a Summary ahead of the Itemized report); the UI then says so instead of mixing them.
+    const span = c => (c ? { label: c.label, start: c.start, end: c.end, days: c.days, resets: c.resets } : null);
+    const lateOf = (c, al) => { const n = c && al && al.snapshot_at && !al.provisional && today > c.end ? lateDays(c, al.snapshot_at) : 0; return n > RULES.ops.freeze_max_days ? n : null; };
+    const context = {
+      provider: 'vi', today,
+      current: todayCycle ? Object.assign(span(todayCycle), { day: dayDiff(todayCycle.start, today) + 1 }) : null,
+      pool: pool.hasPool ? { label: poolLabel, cycle: span(cycleForLabel(poolLabel)), source: pool.usage_src_name || null, data_through: pool.data_date || null,
+        day: pool.days_elapsed || null, sim_group: pool.snapshot_at || null, counted: pool.eligible_sims, listed: pool.inventory_sims,
+        frozen: !!pool.frozen, start_check: pool.start_check || null, late_group_days: pool.late_group_days || null, as_of: pool.as_of || null } : null,
+      itemized: rtLabel ? { label: rtLabel, cycle: span(rtCyc), data_through: rtDay || null, complete: !!(rtDay && rtCyc && rtDay >= rtCyc.end),
+        sim_group: rtAlloc ? rtAlloc.snapshot_at || null : null, frozen: !!(rtAlloc && rtAlloc.frozen), late_group_days: lateOf(rtCyc, rtAlloc),
+        same_as_pool: !!asOfDate || !poolLabel || rtLabel === poolLabel, current: !!todayCycle && rtLabel === todayCycle.label } : null,
+      monthly: cur ? { label: cur, cycle: span(cyc), data_through: summaryDay(curM) } : null,
+      sim_groups: { count: snaps.length, oldest: snaps.length ? dayOf(snaps[0]) : null, newest: snaps.length ? dayOf(snaps[snaps.length - 1]) : null },
+    };
     return { CD, trData: vehicles.filter(v => v.months.length > 0), rtRows, uploaded: true,
       // month-wise (Summary): the Month filter lists these
       months: labels, currentMonth: cur, cycle: cyc,
       // real-time (Itemized): the Real-time tab's day picker and the pool
       rtMonths: rtLabels, rtMonth: rtLabel, rtCycle: rtCyc, rtDay, asOf: asOfDate, dataDate: rtDay,
-      pool, poolMonth: poolLabel, poolAlert: alert || null, trend, today, todayCycle,
+      pool, poolMonth: poolLabel, poolAlert: alert || null, trend, today, todayCycle, context,
       // loaded on demand from the cloud: some SIMs' daily figures (go-live detection), SIM Group exports, frozen SIM lists
       needsDaily: [...missingDaily.keys()], needsDailySims: [...(mergeWant(missingDaily, state.wantDaily || new Map()), missingDaily)].map(([label, s]) => ({ label, iccids: [...s] })),
       needsSnapshots: [...new Set([...want.snaps, ...state.wantSnaps])], needsFrozen: [...want.frozen],
@@ -1153,7 +1195,7 @@
   // lastUse = each SIM's last day with data (all loaded reports); snaps = earlier pool evaluations of this cycle
   // issues = what did not load from the cloud this session (listed first among the alerts); missing = Map label → Set
   // of SIMs whose daily figures are asked for (firstUseFn)
-  function computePool({ info, alloc, curT, curM, asOfDate, poolDate, day, today, invAsOf, usage, lastUse, snaps, issues, missing }) {
+  function computePool({ info, alloc, curT, curM, asOfDate, poolDate, day, today, invAsOf, usage, lastUse, snaps, issues, missing, exportDays }) {
     const O = RULES.ops;
     const cyc = curM ? cycleForLabel(curM.label) : null;
     const A = [...alloc.map.values()];
@@ -1169,6 +1211,21 @@
     const price = freq.size ? [...freq.entries()].sort((a, b) => b[1] - a[1])[0][0] : null;   // most common pooled price
     const cost = pooled.reduce((a, s) => a + (s.price || 0), 0);
     const idle = pooled.filter(s => useOf(s.iccid) === 0);
+    // Start days (14 Oct 2026): VI's DATE_OF_ACTIVATION is the day a SIM was loaded on the account and stays so when a
+    // Ready SIM goes live; the real start is known only from the SIM Group history (Ready in one export, active in a
+    // later one). With no export from within start_check_days either side of the cycle start, a counted SIM whose start
+    // is VI's date before the cycle (the full plan) may have gone live during it: its start is not verified.
+    const exp = (exportDays || []).filter(Boolean).slice().sort();
+    let startCheck = null;
+    if (cyc) {
+      const from = addDays(cyc.start, -O.start_check_days), limit = addDays(cyc.start, O.start_check_days);
+      const nearest = exp.filter(d => d >= from && d <= limit);
+      const list = nearest.length ? [] : pooled.filter(s => s.src !== 'detected' && (!s.start || s.start <= cyc.start));
+      startCheck = { verified: !list.length, near_export: nearest[0] || null, oldest_export: exp[0] || null, from, limit, sims: list.length, gb: list.reduce((a, s) => a + s.gb, 0) };
+    }
+    // A closed cycle built from a SIM Group exported long after it ended (a frozen one keeps it until recomputed).
+    // A provisional fallback (the cycle's own export still loading) is not "late": the provisional alert says so.
+    const lateGroup = cyc && alloc.snapshot_at && !alloc.provisional && today && today > cyc.end ? lateDays(cyc, alloc.snapshot_at) : 0;
     const refDate = day || (curM && curM.period_end) || null;
     const recent = refDate ? idle.filter(s => s.start && dayDiff(s.start, refDate) <= 30).length : 0;
     const over = pooled.filter(s => useOf(s.iccid) > s.gb + 1e-9);
@@ -1414,6 +1471,8 @@
       : `Shared pool projected to run out around ${fmtDate(exhaustion)}, ${gapDays.toFixed(1)} day(s) before the cycle ends (${fmtDate(cyc && cyc.end)}) — ${paceTxt}; short by ${r2(shortfall)} GB → backup ${backup.toLocaleString('en-IN')} GB (incl. ${O.backup_margin_pct}%).`);
     else if (level === 'warning') add('warning', 'pool_warning', `Shared pool tight: ${pct1(projUtil)} projected by ${fmtDate(cyc && cyc.end)} at ${paceTxt}${exhaustion ? ` — runs out around ${fmtDate(exhaustion)}` : ''}.`);
     (issues || []).forEach(t => add('warning', 'load_failed', t));
+    if (startCheck && !startCheck.verified) add('warning', 'start_unverified', `Start days not verified: ${startCheck.sims} of the ${pooled.length} SIMs that count get their full plan from VI's activation date (${r2(startCheck.gb)} GB). VI keeps the day a SIM was loaded on the account even after it goes live, and no SIM Group file from the start of this cycle (${fmtDate(startCheck.from)} – ${fmtDate(startCheck.limit)}) is loaded${startCheck.oldest_export ? ` — the oldest is from ${fmtDate(startCheck.oldest_export)}` : ''}. SIMs that went live after ${fmtDate(cyc.start)} are over-counted. Upload the SIM Group files from around ${fmtDate(cyc.start)} onwards (oldest first): each SIM's go-live day is then found from them.`);
+    if (lateGroup > O.freeze_max_days) add('warning', 'late_group', `This cycle ended ${fmtDate(cyc.end)}, but its pool is built from the SIM Group file of ${fmtDate(alloc.snapshot_at)} — ${lateGroup} days later — so SIMs that went live after the cycle may be counted in it. Upload the SIM Group file nearest ${fmtDate(cyc.end)}${alloc.frozen ? ', then ↻ Recompute this cycle (Uploads tab)' : ' — it is used at once'}.`);
     if (ended) add('warning', 'cycle_ended', `The ${curM.label} cycle ended on ${fmtDate(cyc && cyc.end)} without its final usage report (data to ${fmtDate(dataDay)}). Usage has reset — upload the new cycle's reports.`);
     if (cap > 0 && util >= 80 && level !== 'critical' && !ended) add('info', 'high_util', `Pool utilisation ${util.toFixed(2)}% — ${r2(cap - used)} GB left.`);
     const burnNow = sp ? sp.burn_gb_day : pace;
@@ -1449,7 +1508,9 @@
     alerts.sort((a, b) => (b.code === 'load_failed') - (a.code === 'load_failed') || order[a.level] - order[b.level]);
     const todayCycle = cycleForDate(today);
     return { hasPool: true, inventory_loaded: true, snapshot_at: alloc.snapshot_at, provisional: !!alloc.provisional,
-      frozen: alloc.frozen ? { at: alloc.frozen.computed_at, snapshot_at: alloc.frozen.snapshot_at, by: alloc.frozen.computed_by || null } : null,
+      frozen: alloc.frozen ? { at: alloc.frozen.computed_at, snapshot_at: alloc.frozen.snapshot_at, by: alloc.frozen.computed_by || null,
+        // the states that counted when it was frozen (today's rules may differ)
+        eligible_states: alloc.frozen.rules && alloc.frozen.rules.status_rules ? Object.keys(alloc.frozen.rules.status_rules).filter(k => alloc.frozen.rules.status_rules[k]) : null } : null,
       as_of: asOfDate || null, pool_date: poolDate || null, data_date: day || itLast || null, daily_until: itLast || null,
       usage_src: src, usage_src_name: SRC_NAME[src], usage_other_day: (usage && usage.other) || null,
       cycle: cyc, not_yet_active: planned.length - pooled.length, days, plans, rules: { eligible_states: eligibleStates(), pool_tag: RULES.pool_tag, plan_days: PRORATE_DAYS },
@@ -1457,6 +1518,7 @@
       inventory_sims: A.length, eligible_sims: pooled.length, non_eligible_sims: A.length - planned.length,
       pooled_sims: pooled.length, plan_mix: planMix, prorated, full_gb: prorated.full_gb, prorated_gb: prorated.gb,
       new_activations: { count: fresh.length, gb: fresh.reduce((a, s) => a + s.gb, 0) }, detected_sims: detected.length,
+      start_check: startCheck, late_group_days: lateGroup > O.freeze_max_days ? lateGroup : null,
       capacity_gb: cap, price_per_sim: price, monthly_cost: cost,
       used_gb: used, remaining_gb: cap - used, util_pct: util, projected_gb: projected, projected_pct: projUtil, pace_gb: pace,
       level, forecast, zero, high, burn,
@@ -1635,6 +1697,10 @@
       if (state.frozen[label] || state.months[label].light) return;     // a month not loaded yet waits for its rows
       const cyc = cycleForLabel(label); if (!cyc || cyc.end >= today) return;
       const snap = snaps.find(s => dayOf(s) >= cyc.end); if (!snap) return;
+      // An export from long after the cycle ended (14 Oct 2026) also lists SIMs that went live after the cycle with VI's
+      // older load date: the freeze waits freeze_max_days for a closer export to be uploaded (picked at once), then
+      // freezes with the late one — still flagged (late_group) until an admin recomputes it with a closer export.
+      if (lateDays(cyc, snap.as_of) > RULES.ops.freeze_max_days && dayDiff(dayOf(snap.as_of), today) <= RULES.ops.freeze_max_days) return;
       if (!snap.sims) { state.wantSnaps.add(snap.as_of); return; }      // that export's rows load first
       const miss = state.canLoadDaily ? new Map() : null;
       const rec = freezeRecord(label, snap, snaps, state.months, miss);
@@ -1761,7 +1827,7 @@
   }
 
   window.ViProvider = { TYPE_LABELS, DEFAULT_RULES, get CYCLE_START_DAY() { return CYCLE_START_DAY; }, get PRORATE_DAYS() { return PRORATE_DAYS; },
-    allotment, allocations, goLive, eligibility, ruleFor, setRules, rulesConfig, updateRules, eligibleStates, parseCsvText, detect, parseFile, planInfo, normStatus,
+    allotment, allocations, goLive, eligibility, ruleFor, setRules, rulesConfig, updateRules, eligibleStates, parseCsvText, detect, parseFile, planInfo, normStatus, itemizedCycles, lateDays,
     monthLabelForDate, cycleForDate, cycleForLabel, dayDiff, addDays, mergeMonth, reconcile, simTotals, simTotalsAsOf, itemizedLast,
     buildDataset, computePool, freezeRecord, latestUsage, usageSrc, summaryDay, simDailyStats, simCycleAllocation, evaluatePoolAlert, poolSnapshotRow,
     addPoolSnapshot, ALERT_CODE, localToday, cycleSnapshot, snapshotsWith, asOfOptions, state, hasData, rebuild, applyUpload, setFromCloud,

@@ -311,20 +311,31 @@
     const el = $('pool-strip'); if (!el) return;
     const html = (view.parts || []).filter(p => p.ds.pool && p.ds.pool.hasPool).map(p => {
       const pool = p.ds.pool, cfg = PV().get(p.c), f = pool.forecast || {}, over = pool.remaining_gb < 0, z = pool.zero || {}, pc = f.pace;
-      const lasts = f.lasts_days === Infinity ? 'no usage yet' : `${days1(f.lasts_days)} vs ${days1(f.days_left)} left`;
+      const lasts = f.lasts_days === Infinity ? 'no usage yet' : `${days1(f.lasts_days)} vs ${days1(f.days_left)} left${f.data_day ? ' after ' + shortDay(f.data_day) : ''}`;
       const chg = changeLine(pool, p.ds.poolAlert), age = !pool.as_of && f.data_age_days > 1 ? ` <span class="ps-est" title="Upload the newest VI reports">data ${esc(ageTxt(f))}</span>` : '';
       const closed = pool.complete || f.ended;
+      // the billing cycle these figures describe, always named (14 Oct 2026); warnings that qualify the pool size
+      const cyc = pool.cycle ? `<span class="ps-cyc" title="Billing cycle of every figure in this row">📅 ${esc(shortDate(pool.cycle.start))} – ${esc(shortDate(pool.cycle.end))}${pool.days_elapsed && !closed ? ` · day ${n0(pool.days_elapsed)} of ${n0(pool.days_total)}` : ''}</span>` : '';
+      const calc = hook(p.c, 'calcRows') ? `ProvidersUI.openCalc('${esc(p.c)}')` : '';
+      const sc = pool.start_check, warnBtn = (txt, tip) => `<button type="button" class="ps-warn" title="${esc(tip)}"${calc ? ` onclick="${calc}"` : ''}>⚠ ${esc(txt)}</button>`;
+      const warns = (sc && !sc.verified ? warnBtn('Start days not verified', `${n0(sc.sims)} SIMs get their full plan from the activation date — no SIM Group file from the start of this cycle is loaded`) : '')
+        + (pool.late_group_days ? warnBtn('Built from a late SIM Group', `The SIM Group file is ${n0(pool.late_group_days)} days after this cycle ended`) : '');
+      const states = Object.entries(pool.states || {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n0(n)} ${k}`).join(', ');
+      // the states that count — a frozen cycle's own rules, not today's
+      const est = (pool.frozen && pool.frozen.eligible_states) || (pool.rules && pool.rules.eligible_states) || [];
+      const rule = est.length ? ` (${est.join(', ')})` : '';
+      const paceLbl = pc ? `${g2(pc.burn_gb_day)} a day ${pc.basis === 'cycle' ? 'on average this cycle' : 'now'} · ${g2(pc.gb_sim_day)} per SIM` : `${g2(f.avg_gb_day)} a day on average`;
       return `<div class="ops-row ops-r-${esc(pool.level)}" style="--pc:${cfg.color}" role="region" aria-label="${esc(cfg.short)} shared data pool">
-        <div class="ops-h">${lvlBadge(pool.level)}<b>${esc(cfg.short)} shared data pool</b>${pool.as_of ? `<span class="ps-asof">📅 As of ${esc(shortDate(pool.as_of))}</span>` : ''}${pool.frozen ? '<span class="ps-frozen">🔒 Frozen</span>' : ''}${pool.provisional ? '<span class="ps-est">Provisional</span>' : ''}${age}<span class="ops-msg">${esc(opsHeadline(pool))}${chg ? `<span class="ops-chg">${esc(chg)}</span>` : ''}</span></div>
+        <div class="ops-h">${lvlBadge(pool.level)}<b>${esc(cfg.short)} shared data pool</b>${cyc}${pool.as_of ? `<span class="ps-asof">📅 As of ${esc(shortDate(pool.as_of))}</span>` : ''}${pool.frozen ? '<span class="ps-frozen">🔒 Frozen</span>' : ''}${pool.provisional ? '<span class="ps-est">Provisional</span>' : ''}${age}${warns}<span class="ops-msg">${esc(opsHeadline(pool))}${chg ? `<span class="ops-chg">${esc(chg)}</span>` : ''}</span></div>
         <div class="ops-cells">
-          <div class="ps-c"><div class="ps-k">Total pool</div><div class="ps-v">${g2(pool.capacity_gb)}</div><div class="ps-s">${n0(pool.eligible_sims)} of ${n0(pool.inventory_sims)} SIMs count</div></div>
+          <div class="ps-c"><div class="ps-k">Total pool</div><div class="ps-v">${g2(pool.capacity_gb)}</div><div class="ps-s" title="${esc(states ? 'SIM Group file: ' + states : '')}">${n0(pool.eligible_sims)} of ${n0(pool.inventory_sims)} SIMs count${esc(rule)}</div></div>
           <div class="ps-c"><div class="ps-k">${esc(pool.as_of ? usedLbl(pool) : 'Used')}</div><div class="ps-v">${g2(pool.used_gb)}</div><div class="ps-s">${pct(pool.util_pct, 2)} · ${esc(usedSrc(pool))}${!pool.as_of && f.data_age_days != null ? ` (${esc(ageTxt(f))})` : ''}</div></div>
-          <div class="ps-c"><div class="ps-k">${over ? 'Over the pool by' : 'Remaining'}</div><div class="ps-v">${g2(Math.abs(pool.remaining_gb))}</div><div class="ps-s">${closed ? 'cycle closed' : pc ? `${g2(pc.burn_gb_day)} a day now · ${g2(pc.gb_sim_day)} per SIM` : `${g2(f.avg_gb_day)} a day on average`}</div></div>
+          <div class="ps-c"><div class="ps-k">${over ? 'Over the pool by' : 'Remaining'}</div><div class="ps-v">${g2(Math.abs(pool.remaining_gb))}</div><div class="ps-s">${closed ? 'cycle closed' : paceLbl}</div></div>
           ${closed ? '' : `<div class="ps-c ops-risk"><div class="ps-k">Pool lasts</div><div class="ps-v">${esc(f.exhaustion_date ? '~' + shortDay(f.exhaustion_date) : 'whole cycle')}</div><div class="ps-s">${esc(lasts)}${f.backup_gb ? ` · backup ${n0(f.backup_gb)} GB` : ''}</div></div>`}
-          <div class="ps-m">${meter(pool.util_pct)}<div class="ps-s">${closed || !pool.days_elapsed ? '' : `${pct(pool.projected_pct, 0)} projected by ${esc(shortDay(f.cycle_end))}`}</div></div>
+          <div class="ps-m">${meter(pool.util_pct)}<div class="ps-s">${closed || !pool.days_elapsed ? '' : `${pct(pool.util_pct, 0)} used · ${pct(pool.projected_pct, 0)} projected by ${esc(shortDay(f.cycle_end))}`}</div></div>
           ${z.count != null ? `<button type="button" class="ops-zero-btn" onclick="ProvidersUI.goPool('${esc(p.c)}','zero')" title="SIMs in the pool that used no data this cycle"><span class="ps-k">Zero usage</span><span class="ps-v">${n0(z.count)}</span><span class="ps-s">${n0(z.long_term)} for ${n0(z.long_days)}+ days</span></button>` : ''}
         </div>
-        <div class="ops-act">${pool.as_of ? latestBtn(p.c) : ''}<button type="button" class="ps-link" onclick="ProvidersUI.goPool('${esc(p.c)}','forecast')">View pool forecast →</button></div>
+        <div class="ops-act">${pool.as_of ? latestBtn(p.c) : ''}${calc ? `<button type="button" class="ps-link" onclick="${calc}">🧮 Calculation details</button>` : ''}<button type="button" class="ps-link" onclick="ProvidersUI.goPool('${esc(p.c)}','forecast')">View pool forecast →</button></div>
       </div>`;
     }).join('');
     el.innerHTML = html;
@@ -587,6 +598,30 @@
         <td>${esc(when(a.last_updated))}</td><td>${esc(a.resolved_at ? when(a.resolved_at) : '')}</td><td class="pv-why">${esc(a.resolution_reason || '')}</td></tr>`; }).join('');
     return `<details class="pv-card" id="pv-alerts-${esc(cfg.code)}"><summary class="pv-card-t">Shared-pool alert history · ${n0(list.length)} <span class="pv-muted">· one open alert at a time; it is updated, escalated or resolved as new data arrives</span></summary>
       ${rows ? `<div class="tw"><table class="pv-table"><thead><tr><th>Detected</th><th>Level</th><th>Status</th><th>Cycle</th><th>Figures</th><th>Last updated</th><th>Resolved</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="pv-muted">No shared-pool alert so far.</div>'}</details>`;
+  }
+
+  /* Calculation details: every figure with its source, billing cycle, SIMs and formula (provider hook calcRows) */
+  function closeCalc() { const m = $('pv-calc'); if (m) m.style.display = 'none'; }
+  function openCalc(code) {
+    const f = hook(code, 'calcRows'); if (!f) return;
+    const part = ((PV().currentView() || {}).parts || []).find(p => p.c === code);
+    const d = f(part ? part.ds : PV().raw(code)); if (!d) return;
+    let m = $('pv-calc');
+    if (!m) {
+      m = document.createElement('div'); m.id = 'pv-calc'; m.className = 'ops-pop';
+      m.innerHTML = `<div class="pv-sim-card" role="dialog" aria-modal="true" aria-label="Calculation details"><button type="button" class="vi-x pv-sim-x" aria-label="Close" onclick="ProvidersUI.closeCalc()">✕</button><div class="pv-calc-body"></div></div>`;
+      m.addEventListener('click', e => { if (e.target === m) closeCalc(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && m.style.display !== 'none') closeCalc(); });
+      document.body.appendChild(m);
+    }
+    const cfg = PV().get(code) || {};
+    m.querySelector('.pv-calc-body').innerHTML = `
+      <div class="pv-sim-h"><i style="background:${cfg.color || '#888'}"></i><div><div class="pv-sim-t">${esc(d.title || 'Calculation details')}</div><div class="pv-muted">Where every figure comes from: source, billing cycle, SIMs and calculation</div></div></div>
+      <div class="tw"><table class="pv-table pv-calc"><thead><tr><th>Figure</th><th class="num">Value</th><th>Source</th><th>Billing cycle</th><th>SIMs</th><th>How it is calculated</th></tr></thead>
+      <tbody>${(d.rows || []).map(r => `<tr><td><b>${esc(r.metric)}</b></td><td class="num">${esc(r.value)}</td><td>${esc(r.source)}</td><td>${esc(r.cycle)}</td><td>${esc(r.sims)}</td><td>${esc(r.calc)}</td></tr>`).join('')}</tbody></table></div>
+      ${(d.notes || []).map(t => `<div class="pv-muted" style="margin-top:8px">ℹ ${esc(t)}</div>`).join('')}`;
+    m.style.display = 'flex';
+    const x = m.querySelector('.pv-sim-x'); if (x) x.focus();
   }
 
   /* SIM detail page: header, allocation vs usage, daily chart (7 / 14 days, cycle, full history), summary, table, cycles */
@@ -910,6 +945,22 @@
     const bits = (view.parts || []).map(p => { const f = hook(p.c, 'rtInfo'); return f ? f(p.ds) : null; }).filter(Boolean);
     el.textContent = bits.join('  ·  ');
     el.style.display = bits.length ? '' : 'none';
+    // Which period the tab shows (14 Oct 2026): a provider's older (historical) report says so in the title and a banner;
+    // two providers whose real-time figures cover different periods are shown side by side, never as one total
+    const periods = PV().rtPeriods(view);
+    const ttl = $('rt-title');
+    if (ttl) {
+      if (ttl.dataset.base == null) ttl.dataset.base = ttl.textContent;
+      const one = periods.length === 1 ? periods[0] : null;
+      ttl.textContent = one && one.title ? one.title : periods.some(x => x.historical) && periods.length > 1 ? 'Real-time Data — periods differ by provider' : ttl.dataset.base;
+    }
+    const bn = $('rt-prov-banner');
+    if (bn) {
+      const mixed = periods.length > 1 && periods.some(x => x.historical)
+        ? `<div class="rt-banner" role="note"><div class="rt-b-warn">⚠ These providers' real-time figures cover different periods — ${periods.map(x => `${esc(x.short)}: ${esc(x.period)}`).join(' · ')}. The cards below show each provider separately; pick one provider in the Provider bar to see one period.</div></div>` : '';
+      const html = mixed + (view.parts || []).map(p => { const f = hook(p.c, 'rtBanner'); return f ? f(p.ds) : ''; }).join('');
+      bn.innerHTML = html; bn.style.display = html ? '' : 'none';
+    }
     // Provider date pickers (e.g. VI "as of" day) next to the legacy snapshot picker
     const ctl = $('rt-prov-ctrl');
     if (ctl) {
@@ -1000,7 +1051,7 @@
 
   window.ProvidersUI = { render, renderPanels, beforeRender, bootstrap, onOpenModal, onUploadMode, setUploadProvider, uploadProvider,
     usesLegacyUpload, canProcess, processUpload, recordLegacyUpload, renderUploads, excNote, planNote, vsumExtra, afterVsum,
-    columnChart, pickLatest, simFilter, simCsv, goPool, zeroFilter, zeroCsv, highCsv, pagerGo, openSim, closeSim, simSetCycle, simSetRange,
+    columnChart, pickLatest, simFilter, simCsv, goPool, zeroFilter, zeroCsv, highCsv, pagerGo, openSim, closeSim, simSetCycle, simSetRange, openCalc, closeCalc,
     // shared helpers for provider UI modules
     h: { esc, n0, gb, inr, pct, shortDate, MON, columnChart, tableView, reconHtml, svgChart } };
 })();

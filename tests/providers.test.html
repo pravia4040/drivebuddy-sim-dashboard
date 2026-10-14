@@ -118,7 +118,18 @@ eq(V.parseFile(S2,'s.csv').suggestedMonth,'Sep 2026','Summary cycle = where most
 const ITH2='E_CODE,ACCOUNTID,MSISDN,IMSI,ICCID,CIRCLE,2026-09-20,2026-09-21,2026-09-22,TOTAL_USAGE:Data-KiloBytes/Voice-Seconds/SMS-Count,ORIGIN_CIRCLE,Last_Packet_Switched_Session_End,Packet_Switched_Session_Days';
 const I2=[ITH2,`${E},1,915700000000001,404000000000001,~8991000000000000001,1130499,${B(1)},${B(2)},${B(4)},7340032,GUJ_HOME,2026-09-22 10:00:00,3`].join('\n');
 const d2=V.parseFile(I2,'x.csv');
-eq([d2.suggestedMonth,d2.stats.cycles.length,/2 billing cycles/.test(d2.warnings[0].reason)],['Sep 2026',2,true],'an Itemized file crossing the 22nd is flagged; its main cycle is used');
+eq([d2.suggestedMonth,d2.stats.cycles.length,/2 billing cycles/.test(d2.warnings[0].reason)],['Oct 2026',2,true],'an Itemized file crossing the 22nd is flagged; the cycle of its last day with data is the one brought up to date');
+eq(V.itemizedCycles(d2,'2026-09-22'),{main:'Oct 2026',extra:[],skipped:['Sep 2026'],later:[]},'only 2 days of the Sep cycle are in the file: Sep is not filled from it (its total would be too low)');
+eq(V.itemizedCycles(d2,'2026-09-21'),{main:'Sep 2026',extra:[],skipped:[],later:['Oct 2026']},'"Data up to" 21 Sep: Sep is the cycle brought up to date and the Oct day is left out');
+near([...V.simTotals(V.mergeMonth(null,{itemized:d2},'Oct 2026',null,{until:'2026-09-22'}),'itemized').values()].reduce((a,x)=>a+x.used_mb,0),4*1024,'the Oct cycle gets its own day only (22 Sep = 4 GB)',1e-6);
+// VI's export of 22 Aug – 12 Oct (13 Oct 2026): every day of the Sep cycle + 21 days of the Oct cycle — both are filled
+const allDays=[];for(let x='2026-08-22';x<='2026-10-12';x=V.addDays(x,1))allDays.push(x);
+const ITH3='E_CODE,ACCOUNTID,MSISDN,IMSI,ICCID,CIRCLE,'+allDays.join(',')+',TOTAL_USAGE:Data-KiloBytes/Voice-Seconds/SMS-Count,ORIGIN_CIRCLE,Last_Packet_Switched_Session_End,Packet_Switched_Session_Days';
+const d3=V.parseFile([ITH3,`${E},1,915700000000001,404000000000001,~8991000000000000001,1130499,${allDays.map(()=>B(1)).join(',')},${allDays.length*1024*1024},GUJ_HOME,2026-10-12 10:00:00,${allDays.length}`].join('\n'),'y.csv');
+eq([d3.suggestedMonth,d3.stats.cycles.map(c=>[c.label,c.days,c.complete])],['Oct 2026',[['Sep 2026',31,true],['Oct 2026',21,false]]],'22 Aug – 12 Oct: every day of Sep (complete) and 21 days of Oct');
+eq(V.itemizedCycles(d3,'2026-10-12'),{main:'Oct 2026',extra:['Sep 2026'],skipped:[],later:[]},'both cycles are filled: Oct up to the "Data up to" day, Sep as a complete closed cycle');
+near([...V.simTotals(V.mergeMonth(null,{itemized:d3},'Sep 2026'),'itemized').values()].reduce((a,x)=>a+x.used_mb,0)/1024,31,'Sep cycle = its own 31 days (31 GB), never the whole file\'s total',1e-6);
+near([...V.simTotals(V.mergeMonth(null,{itemized:d3},'Oct 2026',null,{until:'2026-10-12'}),'itemized').values()].reduce((a,x)=>a+x.used_mb,0)/1024,21,'Oct cycle = 22 Sep – 12 Oct (21 GB)',1e-6);
 const m4=V.mergeMonth(null,{itemized:d2},'Sep 2026');
 near([...V.simTotals(m4,'itemized').values()].reduce((a,x)=>a+x.used_mb,0),3*1024,'only the Sep-cycle days count (20–21 Sep = 3 GB); 22 Sep belongs to the next cycle',1e-6);
 eq([m4.period_start,m4.period_end,m4.last_data_date,m4.sources.itemized.dropped_days],['2026-08-22','2026-09-21','2026-09-21',1],'cycle bounds come from the label, not the file; the 22 Sep column is dropped');
@@ -341,6 +352,43 @@ eq(V.recomputeCycle('Oct 2026').ok,false,'an open cycle cannot be recomputed —
 const rc=V.recomputeCycle('Sep 2026');
 eq([rc.ok,V.takePendingFreeze().map(x=>x.force)],[true,[true]],'admin recompute of a closed cycle overwrites the saved one');
 Object.assign(V.state,{today:null,inventory:null,snapshots:[],months:{},frozen:{},pendingFreeze:[],asOf:null});
+
+group('which period each figure covers (14 Oct 2026): start days, a late SIM Group, one cycle context');
+const D14='2026-10-14';
+const s13={as_of:'2026-10-13 15:59:04',sims:s28.sims};                          // active now, VI's 8 Sep load date
+const pU=bd({inventory:s13,months:{'Oct 2026':mO},fleet,today:D14}).pool;
+eq([pU.start_check.verified,pU.start_check.sims,pU.start_check.near_export,pU.capacity_gb],[false,1,null,85],'only a 13 Oct SIM Group: the SIM gets its full 85 GB from VI\'s date — and its start is flagged as not verified');
+const s01Jun={as_of:'2026-06-01 10:00:00',sims:[]};
+eq(bd({inventory:s13,snapshots:[s01Jun,s13],months:{'Oct 2026':mO},fleet,today:D14}).pool.start_check.verified,false,'a file from months before the cycle (1 Jun) does not verify its start days — only one from 15 – 29 Sep does');
+ok(pU.alerts.some(a=>a.code==='start_unverified'&&/Start days not verified: 1 of the 1/.test(a.text)&&/oldest is from/.test(a.text)),'…with a warning that says which SIM Group files to upload');
+const pV=bd({inventory:s13,snapshots:[s25,s13],months:{'Oct 2026':mO},fleet,today:D14}).pool;
+eq([pV.start_check.verified,pV.sim_table[0].start,Math.round(pV.capacity_gb*100)/100],[true,'2026-09-26',73.67],'with the 25 Sep file (Ready) the go-live day is found: 26 Sep, 73.67 GB — verified');
+ok(!pV.alerts.some(a=>a.code==='start_unverified'),'…and no warning');
+const sepLate=bd({inventory:{as_of:'2026-10-13 15:59:04',sims:g.rows},months:{'Sep 2026':m},fleet,today:D14});
+eq([sepLate.pool.late_group_days,sepLate.context.pool.late_group_days],[22,22],'the closed Sep cycle built from a SIM Group of 13 Oct: 22 days after it ended — flagged');
+ok(sepLate.pool.alerts.some(a=>a.code==='late_group'&&/Upload the SIM Group file nearest 21 Sep 2026/.test(a.text)),'…with what to upload');
+eq(bd({inventory:inv25,months:{'Sep 2026':m},fleet,today:D14}).pool.late_group_days,null,'the 25 Sep file (4 days after) is not late');
+Object.assign(V.state,{today:D14,inventory:{as_of:'2026-10-13 15:59:04',sims:g.rows},snapshots:[],months:{'Sep 2026':m},frozen:{},pendingFreeze:[]});
+V.rebuild({silent:true});
+eq(Object.keys(V.state.frozen),[],'auto-freeze waits: the only SIM Group after the Sep cycle is 22 days late (the cycle stays built live from it, flagged)');
+V.state.snapshots=[inv25]; V.rebuild({silent:true});
+eq([Object.keys(V.state.frozen),V.state.frozen['Sep 2026']&&V.state.frozen['Sep 2026'].snapshot_at],[['Sep 2026'],'2026-09-25 15:48:40'],'…the 25 Sep file uploaded later is used at once, and the cycle is frozen with it');
+V.takePendingFreeze();
+Object.assign(V.state,{today:'2026-10-25',inventory:{as_of:'2026-10-13 15:59:04',sims:g.rows},snapshots:[],months:{'Sep 2026':m},frozen:{},pendingFreeze:[]});
+V.rebuild({silent:true});
+const lateF=V.state.frozen['Sep 2026'], dLate=V.buildDataset({inventory:V.state.inventory,months:V.state.months,frozen:V.state.frozen,fleet,today:'2026-10-25'});
+eq([lateF&&lateF.snapshot_at,dLate.pool.late_group_days,dLate.pool.alerts.some(a=>a.code==='late_group'&&/Recompute/.test(a.text))],['2026-10-13 15:59:04',22,true],'no closer file a week later (25 Oct): frozen with the late one — still flagged, with Recompute in the warning');
+V.takePendingFreeze();
+Object.assign(V.state,{today:null,inventory:null,snapshots:[],months:{},frozen:{},pendingFreeze:[],asOf:null});
+// The Real-time tab on an older Itemized cycle than the pool's: the context says so, so no label calls it current
+const mSepIt=V.mergeMonth(null,{itemized:d},'Sep 2026'), mOctSum=V.mergeMonth(null,{summary:V.parseFile(sum([`${E},1,915700000000021,404000000000021,~8991000000000000021,1130499,1048576.0000,GUJ_HOME,2026-10-12 10:00:00,20`]),'s.csv')},'Oct 2026');
+const cx=bd({inventory:s13,snapshots:[s25,s13],months:{'Sep 2026':mSepIt,'Oct 2026':mOctSum},fleet,today:D14}).context;
+eq([cx.current.label,cx.current.day,cx.pool.label,cx.pool.source,cx.itemized.label,cx.itemized.same_as_pool,cx.itemized.current,cx.monthly.label],
+  ['Oct 2026',23,'Oct 2026','Data Usage Summary','Sep 2026',false,false,'Oct 2026'],'one context: today = Oct cycle day 23; pool = Oct (Summary); Real-time = the Sep Itemized cycle — not the pool\'s, not current');
+eq([cx.sim_groups.count,cx.sim_groups.oldest],[2,'2026-09-25'],'…and which SIM Group files are loaded');
+const sNoDate={as_of:'2026-09-28 13:56:32',sims:V.parseFile(inv([GA('active').replace('2026-09-08 10:00:00.000000','')]),'g.csv').rows};
+const pN=bd({inventory:sNoDate,months:{'Oct 2026':mO},fleet,today:D14}).pool;
+eq([sNoDate.sims.length,pN.capacity_gb,pN.alerts.some(a=>a.code==='no_date')],[1,85,true],'a SIM with no activation date in the SIM Group: counted at the full plan, and flagged');
 
 group('pool used = the newest report (decided 6 Oct 2026); Real-time tab and daily charts stay on the Itemized report');
 eq([ds.pool.usage_src,ds.pool.data_date],['itemized','2026-09-21'],'Summary and Itemized both reach 21 Sep → the Itemized report');

@@ -549,6 +549,26 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
 .pv-sim-h{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-right:30px;}
 .pv-sim-h>i{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
 .pv-sim-t{font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;color:var(--wh);word-break:break-all;}
+/* Which period the figures cover: pool cycle chip, warnings, Real-time banner, calculation details (14 Oct 2026) */
+.ps-cyc{font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;color:var(--sl);background:var(--b2);border-radius:4px;padding:1px 7px;}
+.ps-warn{font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;color:#fca5a5;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:4px;padding:1px 6px;letter-spacing:.4px;text-transform:uppercase;cursor:pointer;}
+.ps-warn:hover,.ps-warn:focus-visible{border-color:#ef4444;}
+.rt-banner{background:var(--dc);border:1px solid var(--b2);border-left:3px solid var(--or);border-radius:10px;padding:12px 16px;margin-bottom:14px;font-family:'Poppins',sans-serif;font-size:12px;color:var(--sl);line-height:1.5;}
+.rt-banner.rt-b-hist{border-color:rgba(255,123,0,.45);}
+.rt-b-h{color:var(--wh);font-size:13px;}
+.rt-b-s{margin-top:4px;color:var(--gr);}
+.rt-b-cur{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:10px;padding-top:10px;border-top:1px solid var(--b2);}
+.rt-b-cur b{color:var(--wh);}
+.rt-b-k{font-family:'Mulish',sans-serif;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--or);flex-basis:100%;}
+.rt-b-src{color:var(--gr);}
+.rt-b-warn{margin-top:8px;color:#fca5a5;}
+.rt-b-warn:first-child{margin-top:0;}
+.rt-split{font-size:15px;line-height:1.35;}
+.rt-split span{display:block;font-size:10px;font-weight:400;color:var(--gr);}
+#pv-calc .tw{overflow-x:auto;}
+.pv-calc td{vertical-align:top;}
+.pv-calc td:last-child{min-width:260px;white-space:normal;}
+@media(max-width:600px){.rt-b-cur{gap:4px 12px;}.pv-calc td:last-child{min-width:180px;}}
 .pv-svg svg{display:block;width:100%;height:auto;}
 .sv-grid{stroke:#222;stroke-width:1;}.sv-base{stroke:#383835;}
 .sv-yl{font-family:'Roboto',monospace;font-size:10px;fill:var(--gr);text-anchor:end;}
@@ -1086,7 +1106,7 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
   <div class="sec-hdr">
     <div>
       <div class="sec-ey">SIM Portal Live Data</div>
-      <div class="sec-title">Real-time Data Allocation &amp; Usage</div>
+      <div class="sec-title" id="rt-title">Real-time Data Allocation &amp; Usage</div>
       <div id="rt-snapshot-info" style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr);margin-top:4px;display:none">📅 Snapshot: <span id="rt-snapshot-date">—</span></div>
       <div id="rt-prov-info" style="font-family:'Roboto',monospace;font-size:11px;color:var(--gr);margin-top:4px;display:none"></div>
     </div>
@@ -1118,6 +1138,9 @@ tbody td{padding:9px 14px;font-size:12px;vertical-align:middle;}
     <div class="exp-grp"><button class="exp-btn" onclick="exportRT()">⬇ Excel</button><button class="exp-btn" onclick="exportRT('csv')">CSV</button></div>
     <button class="or-btn editor-only" style="margin-left:auto" onclick="openModal();setUploadMode('realtime')">📡 Upload Real-time</button>
   </div>
+
+  <!-- Which period the figures cover, when it is not the current cycle (filled by providers/ui.js) -->
+  <div id="rt-prov-banner" style="display:none"></div>
 
   <!-- Empty state -->
   <div id="rt-no-data" style="text-align:center;padding:48px 24px;background:var(--dc);border:1px dashed var(--b2);border-radius:12px;">
@@ -1732,14 +1755,20 @@ function renderRTRibbon(){
   const usedPct=totalAlloc>0?Math.round(totalUsed/totalAlloc*1000)/10:0;
   const availPct=totalAlloc>0?Math.round(totalAvail/totalAlloc*1000)/10:0;
   const wastedSims=rows.filter(r=>r.flag==='WASTED').length;
-  // A provider shown as of an earlier day (VI day picker): say so; Airtel always reads "Current cycle"
+  // The period on screen: a provider shown as of an earlier day (VI day picker), an older (historical) report, or
+  // providers whose periods differ — then each provider's figure is shown on its own, never one mixed total
   const asOf=window.Providers&&Providers.rtAsOf?Providers.rtAsOf():null;
-  const cycleLbl=asOf?'As of the end of '+new Date(asOf+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'Current cycle';
+  const periods=window.Providers&&Providers.rtPeriods?Providers.rtPeriods():[];
+  const hist=periods.length===1&&periods[0].historical?periods[0]:null;
+  const mixed=periods.length>1&&periods.some(p=>p.historical);
+  const cycleLbl=asOf?'As of the end of '+new Date(asOf+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):hist?`${hist.period} — not the current cycle`:mixed?'Each provider\'s own period':'Current cycle';
+  const gbOf=(list,k)=>Math.round(list.reduce((s,r)=>s+r[k],0)/1024).toLocaleString()+' GB';
+  const val=k=>mixed?periods.map(p=>`<div class="rt-split">${p.short} ${gbOf(rows.filter(r=>(r.provider||'airtel')===p.code),k)}<span>${p.period}</span></div>`).join(''):gbOf(rows,k);
   document.getElementById('rt-ribbon').innerHTML=`
     <div class="dgr orange"><div class="dgr-lbl">Total SIMs</div><div class="dgr-val">${totalSims.toLocaleString()}</div><div class="dgr-sub">${mapped.toLocaleString()} mapped to vehicles · ${(totalSims-mapped).toLocaleString()} unmapped</div></div>
-    <div class="dgr"><div class="dgr-lbl">Total Allocated</div><div class="dgr-val">${Math.round(totalAlloc/1024).toLocaleString()} GB</div><div class="dgr-sub">${cycleLbl}${planGb&&!asOf?` · plan sizes add up to ${planGb.toLocaleString()} GB`:''}</div></div>
-    <div class="dgr"><div class="dgr-lbl">Total Used</div><div class="dgr-val" style="color:#4ade80">${Math.round(totalUsed/1024).toLocaleString()} GB</div><div class="dgr-sub">${usedPct}% of allocated</div></div>
-    <div class="dgr" style="border-color:rgba(239,68,68,.3)"><div class="dgr-lbl">Available (Unused)</div><div class="dgr-val" style="color:#ef4444">${Math.round(totalAvail/1024).toLocaleString()} GB</div><div class="dgr-sub">${availPct}% remaining · ${wastedSims.toLocaleString()} SIMs &lt;5% used</div></div>`;
+    <div class="dgr"><div class="dgr-lbl">Total Allocated</div><div class="dgr-val">${val('alloc_mb')}</div><div class="dgr-sub">${cycleLbl}${planGb&&!asOf&&!mixed?` · plan sizes add up to ${planGb.toLocaleString()} GB`:''}</div></div>
+    <div class="dgr"><div class="dgr-lbl">Total Used</div><div class="dgr-val" style="color:#4ade80">${val('used_mb')}</div><div class="dgr-sub">${mixed?'Not added across providers — different periods':`${usedPct}% of allocated`}</div></div>
+    <div class="dgr" style="border-color:rgba(239,68,68,.3)"><div class="dgr-lbl">Available (Unused)</div><div class="dgr-val" style="color:#ef4444">${val('avail_mb')}</div><div class="dgr-sub">${mixed?'':`${availPct}% remaining · `}${wastedSims.toLocaleString()} SIMs &lt;5% used</div></div>`;
 }
 
 // Clickable status-count chips (always computed from the FULL snapshot, not the filtered subset)

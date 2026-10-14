@@ -138,7 +138,7 @@
     return rec;
   }
   async function markBatches(ids, status, detail) {
-    st.session.forEach(r => { if (ids.includes(r.id)) { r.status = status; r.details = Object.assign({}, r.details, detail); } });
+    [st.session, st.cloudHistory || []].forEach(list => list.forEach(r => { if (ids.includes(r.id)) { r.status = status; r.details = Object.assign({}, r.details, detail); } }));
     if (!st.ready || !ids.length) return;
     const { error } = await client().from(T.batches).update({ status }).in('id', ids);
     if (error) console.warn('[provider-cloud] could not mark batches', status, error.message);

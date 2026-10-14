@@ -3,7 +3,8 @@
    ------------------------------------------------------------
    cfg.upload  { mount, render, canProcess, process, syncMode }  upload form
    cfg.ui      { reconSection, rtInfo, rtControls, pickDay, vsumExtra, afterVsum,
-                 statusRuleControl, poolHeaderExtra, simModel, alertHistory, searchCard }
+                 statusRuleControl, poolHeaderExtra, simModel, alertHistory, searchCard,
+                 rtTitle, rtBanner, calcRows }
    cfg.boot()  load saved VI data at start-up
    Upload modes follow Airtel's: Monthly = Data Usage Summary (month-wise tabs),
    Real-time = Itemized report (Real-time tab + pool). The SIM Group file can go
@@ -101,7 +102,7 @@
     if (e.error || p.fatal) out.push(`<div class="vi-err">${esc(e.error || p.fatal)}</div>`);
     else {
       out.push(`<div class="vi-stats"><span><b>${n0(s.total)}</b> rows</span><span><b>${n0(s.valid)}</b> valid</span><span class="${s.duplicates ? 'vi-w' : ''}"><b>${n0(s.duplicates)}</b> duplicate</span><span class="${s.invalid ? 'vi-e' : ''}"><b>${n0(s.invalid)}</b> invalid</span><span><b>${n0(s.unique_sims)}</b> SIMs</span>${type !== INV ? `<span><b>${gb(s.total_mb / 1024)}</b></span>` : ''}</div>`);
-      if (type === 'vi_usage_itemized') out.push(`<div class="vi-card-s">Days ${shortDate(s.period_start)} – ${shortDate(s.period_end)} → ${esc(p.suggestedMonth || '—')} cycle · daily values in ${esc(p.unit)}${p.unitCheck ? ` (confirmed on ${n0(p.unitCheck.bytes + p.unitCheck.kb)} rows)` : ''}</div>`);
+      if (type === 'vi_usage_itemized') out.push(`<div class="vi-card-s">Days ${shortDate(s.period_start)} – ${shortDate(s.period_end)} → ${esc((s.cycles || []).length > 1 ? s.cycles.map(c => c.label).join(' + ') + ' cycles' : (p.suggestedMonth || '—') + ' cycle')} · daily values in ${esc(p.unit)}${p.unitCheck ? ` (confirmed on ${n0(p.unitCheck.bytes + p.unitCheck.kb)} rows)` : ''}</div>`);
       if (type === 'vi_usage_summary') out.push(`<div class="vi-card-s">Usage unit ${esc(p.unit)} · last session ${esc(s.max_last_session || '—')} → ${esc(p.suggestedMonth || '—')} cycle</div>`);
       if (type === INV) {
         // States exactly as VI writes them, and which of them count in the pool
@@ -110,7 +111,7 @@
         out.push(`<div class="vi-card-s">${p.exportedAt ? `Exported ${esc(shortDate(p.exportedAt))} ${esc(p.exportedAt.slice(11, 16))} (from the file name)` : '⚠ No export date in the file name — taken as today. Keep VI\'s original file name (…_YYYYMMDDHHMMSS.csv): the export date decides which cycle the file describes and when Ready SIMs went live.'}</div>`);
         if (older) out.push(`<div class="vi-note">This export is older than the SIM Group already loaded (${esc(shortDate(cur.as_of))}). It is kept as history — it helps date SIMs that were Ready — and does not replace the newer one.</div>`);
       }
-      if (e.duplicateOf) out.push(`<div class="vi-dup">↺ This exact file was already uploaded${e.duplicateOf.uploaded_at ? ' on ' + esc(new Date(e.duplicateOf.uploaded_at).toLocaleString()) : ''} — it will be skipped, nothing is counted twice.${type === 'vi_usage_itemized' ? ' To load it with a different “Data up to” date, delete its cycle on the Uploads tab first.' : ''}</div>`);
+      if (e.duplicateOf) out.push(`<div class="vi-dup">↺ This exact file was already uploaded${e.duplicateOf.uploaded_at ? ' on ' + esc(new Date(e.duplicateOf.uploaded_at).toLocaleString()) : ''} — it will be skipped, nothing is counted twice.${type === 'vi_usage_itemized' ? ` To load it with a different “Data up to” date, delete its cycle${e.duplicateOf.reporting_period ? ` (${esc(e.duplicateOf.reporting_period)})` : ''} on the Uploads tab first.` : ''}</div>`);
       const issues = (p.errors || []).map(x => Object.assign({ kind: 'Error' }, x)).concat((p.warnings || []).map(x => Object.assign({ kind: 'Warning' }, x)));
       if (issues.length) out.push(`<details class="vi-issues"><summary>View errors & warnings (${issues.length})</summary><table><thead><tr><th>Type</th><th>Line</th><th>Field</th><th>Value</th><th>Reason</th></tr></thead><tbody>${issues.slice(0, 200).map(x => `<tr><td>${x.kind}</td><td>${esc(x.line)}</td><td>${esc(x.field)}</td><td class="mono">${esc(x.value)}</td><td>${esc(x.reason)}</td></tr>`).join('')}</tbody></table></details>`);
     }
@@ -155,28 +156,32 @@
     const unknown = st.unknown.map(e => `<div class="vi-card vi-bad"><div class="vi-card-h"><span class="vi-ic">❌</span><b>Not a VI export</b><span class="vi-fn">${esc(e.name)}</span></div><div class="vi-err">${esc(e.error || (e.parsed && e.parsed.fatal) || 'Unrecognised columns')}</div></div>`).join('');
     el.innerHTML = [M.usage, INV].map(card).join('') + wrongCard(MODES[M.other].usage) + unknown;
     const U = usable(M.usage);
-    // Real-time: the Itemized dates decide the billing cycle (22nd → 21st); the date to choose is the
-    // "Data up to" day — like Airtel's snapshot date, within the days the report covers
-    const lock = st.mode === 'realtime' && U ? U.parsed.suggestedMonth : null;
-    if (lock) st.month = lock;
-    const r = lock ? untilRange(U) : null;
+    // Real-time: the date to choose is the "Data up to" day — like Airtel's snapshot date, within the days the report
+    // covers. Its billing cycle (22nd → 21st) is the one this upload brings up to date; earlier cycles the report has
+    // every day of are filled too (itemizedCycles)
+    const isRt = st.mode === 'realtime' && !!U;
+    const r = isRt ? untilRange(U) : null;
     if (r && (!st.until || st.until < r.first || st.until > r.last)) st.until = r.def;
+    const lock = isRt ? V.monthLabelForDate(st.until) || U.parsed.suggestedMonth : null;
+    if (lock) st.month = lock;
+    const plan = isRt ? V.itemizedCycles(U.parsed, st.until) : null;
     const mr = $('vi-month-row');
     if (mr) {
       if (lock || (st.mode === 'monthly' && st.files[M.usage])) {
         const existing = Object.keys(V.state.months);
-        const ex = V.state.months[st.month];
-        const replacing = !!(U && ex && ex.sources[M.source]);
+        const has = l => { const ex = V.state.months[l]; return !!(U && ex && ex.sources[M.source]); };
+        const replacing = [st.month].concat(plan ? plan.extra : []).filter(has);
         const cyc = V.cycleForLabel(st.month), range = cyc ? `${shortDate(cyc.start)} – ${shortDate(cyc.end)}` : '';
-        const multi = lock && (U.parsed.stats.cycles || []).length > 1;
+        const multi = plan && (U.parsed.stats.cycles || []).length > 1;
+        const list = ls => ls.map(l => `<b>${esc(l)}</b>`).join(', ');
         mr.style.display = '';
         mr.innerHTML = (lock
           ? `<label class="sec-ey" for="vi-until">📅 Data up to</label><input type="date" id="vi-until" class="fsel" style="padding:8px 12px;font-family:'Roboto',monospace;color-scheme:dark" min="${r.first}" max="${r.last}" value="${st.until}" onchange="ViUI.setUntil(this.value)">`
-            + `<span class="vi-card-s">The date this report's data runs to — like Airtel's snapshot date. The report covers <b>${esc(shortDate(r.first))} – ${esc(shortDate(r.last))}</b>; days after the date you pick are left out (pick the day before if the export was taken during the day). Billing cycle <b>${esc(st.month)}</b> = ${esc(range)}, set by the report's dates. Usage resets on the 22nd.</span>`
+            + `<span class="vi-card-s">The date this report's data runs to — like Airtel's snapshot date. The report covers <b>${esc(shortDate(r.first))} – ${esc(shortDate(r.last))}</b>; days after the date you pick are left out (pick the day before if the export was taken during the day). Billing cycle <b>${esc(st.month)}</b> = ${esc(range)}, the cycle of that date. Usage resets on the 22nd.</span>`
           : `<label class="sec-ey" for="vi-month">Billing cycle</label><select id="vi-month" class="gf-select" onchange="ViUI.setMonth(this.value)">${monthOptions(st.month, existing)}</select>`
             + `<span class="vi-card-s">The Summary has no dates — cycle suggested from its last sessions: ${esc(range)}. Please confirm. Usage resets on the 22nd.</span>`)
-          + (multi ? `<div class="vi-note">⚠ The Itemized report crosses the 22nd (${U.parsed.stats.cycles.map(c => `${esc(c.label)}: ${c.days} days`).join(', ')}). Only the days of ${esc(lock)} are used — upload one report per billing cycle.</div>` : '')
-          + (replacing ? `<div class="vi-note">⚠ ${esc(st.month)} already has a ${esc(M.slot)} — processing <b>replaces</b> it, never adds it twice.</div>` : '');
+          + (multi ? `<div class="vi-note">ℹ The Itemized report crosses the 22nd (${U.parsed.stats.cycles.map(c => `${esc(c.label)}: ${c.days} days${c.complete ? ', complete' : ''}`).join(' · ')}). Each billing cycle gets its own days: ${list([st.month])} up to the date above${plan.extra.length ? `, and ${list(plan.extra)} as ${plan.extra.length > 1 ? 'closed cycles' : 'a closed cycle'} (every day is in the file)` : ''}.${plan.skipped.length ? ` ${list(plan.skipped)}: only part of the cycle is in the file — not used.` : ''}${plan.later.length ? ` ${list(plan.later)}: after the date above — left out.` : ''}</div>` : '')
+          + (replacing.length ? `<div class="vi-note">⚠ ${list(replacing)} already ${replacing.length > 1 ? 'have' : 'has'} a ${esc(M.slot)} — processing <b>replaces</b> it, never adds it twice.</div>` : '');
       } else { mr.style.display = 'none'; mr.innerHTML = ''; }
     }
     const rp = $('vi-recon-preview');
@@ -188,10 +193,9 @@
     const recon = U ? reconHtml(V.mergeMonth(V.state.months[st.month] || null, parts, st.month || 'preview', null, { until: lock ? st.until : null }).recon) : '';
     if (rp) rp.innerHTML = warn + recon;
   }
-  // The days an Itemized report covers inside its billing cycle; default "data up to" = its last day with data
+  // The days an Itemized report covers (every cycle in it); default "data up to" = its last day with data
   function untilRange(U) {
-    const cyc = V.cycleForLabel(U.parsed.suggestedMonth);
-    const days = (U.parsed.stats.dates || []).filter(d => !cyc || (d >= cyc.start && d <= cyc.end));
+    const days = U.parsed.stats.dates || [];
     const first = days[0] || null, last = days[days.length - 1] || null, lu = U.parsed.stats.last_data_date;
     return { first, last, def: lu && first && lu >= first && lu <= last ? lu : last };
   }
@@ -304,14 +308,17 @@
     const U = usable(M.usage), Inv = usable(INV);
     const label = U ? st.month : null, cloud = C();
     const until = mode === 'realtime' && U ? st.until : null;
+    // An Itemized report that crosses the 22nd also fills every earlier cycle it has every day of (itemizedCycles)
+    const extra = mode === 'realtime' && U ? V.itemizedCycles(U.parsed, until).extra : [];
     try {
       // A cycle still loading in the background (only its period row is here): load it first — merging into an empty
       // shell would replace the other report's per-SIM figures in the cloud. Before anything is recorded.
-      if (label && V.state.months[label] && V.state.months[label].light) {
-        window.setProgress(15, `Loading ${label} from the cloud…`);
-        const r = cloud.state.ready ? await cloud.loadPeriods('vi', [label]).catch(() => null) : null;
-        const m = r && r.months[label];
-        if (!m) throw new Error(`${label} has not finished loading from the cloud — try again in a moment`);
+      for (const l of [label].concat(extra)) {
+        if (!l || !V.state.months[l] || !V.state.months[l].light) continue;
+        window.setProgress(15, `Loading ${l} from the cloud…`);
+        const r = cloud.state.ready ? await cloud.loadPeriods('vi', [l]).catch(() => null) : null;
+        const m = r && r.months[l];
+        if (!m) throw new Error(`${l} has not finished loading from the cloud — try again in a moment`);
         m.recon = V.reconcile(m); V.addMonths(r.months);
       }
       window.setProgress(25, 'Recording upload…');
@@ -324,19 +331,29 @@
           reporting_period: k === 'inventory' ? null : label, period_start: s.period_start || null, period_end: s.period_end || null,
           total_rows: s.total, valid_rows: s.valid, duplicate_rows: s.duplicates, invalid_rows: s.invalid,
           total_mb: s.total_mb != null ? Math.round(s.total_mb * 10000) / 10000 : null,
-          details: { mode, data_up_to: k === 'usage' ? until : null, unit: p.unit, unique_sims: s.unique_sims, exported_at: p.exportedAt, states: s.states || null,
+          details: { mode, data_up_to: k === 'usage' ? until : null, cycles: k === 'usage' && extra.length ? [label].concat(extra) : null, unit: p.unit, unique_sims: s.unique_sims, exported_at: p.exportedAt, states: s.states || null,
             errors: (p.errors || []).slice(0, 50), warnings: (p.warnings || []).slice(0, 50) } }));
       }
       window.setProgress(60, 'Building VI dataset…');
       const parts = { inventory: Inv && Inv.parsed }, metas = { inventory: Inv && { batch_id: ids.inventory } };
       if (U) { parts[M.source] = U.parsed; metas[M.source] = { batch_id: ids.usage, file: U.name, hash: U.hash }; }
+      // the cycle of the "Data up to" day with the SIM Group file first (a closed cycle freezes with the history it brings),
+      // then each earlier cycle the report has every day of — its own days only
       const res = V.applyUpload(parts, label, metas, { until });
+      const extraRes = extra.map(l => V.applyUpload({ itemized: U.parsed }, l, { itemized: metas.itemized }, { until: null }));
+      const extraMonths = extraRes.map(r => r.month).filter(Boolean);
+      res.frozenNow += extraRes.reduce((a, r) => a + (r.frozenNow || 0), 0);
       let cloudMsg = cloud.state.ready ? 'saved to cloud' : 'this session only — run the SQL migration to save';
       let saveFailed = false;
       if (cloud.state.ready) {
         window.setProgress(85, 'Saving to cloud…');
         let err = null;
-        if (res.month) {
+        for (const m of extraMonths) {
+          if (err) break;
+          const r = await cloud.savePeriod('vi', m, { itemized: U.parsed });
+          if (!r.saved) err = r.error || r.reason;
+        }
+        if (!err && res.month) {
           const r = await cloud.savePeriod('vi', res.month, { itemized: mode === 'realtime' && U ? U.parsed : null },
             (i, n) => window.setProgress(85 + Math.round(i / n * 10), `Saving to cloud… ${i} of ${n}`));
           if (!r.saved) err = r.error || r.reason;
@@ -362,7 +379,8 @@
       const what = mode === 'monthly' ? 'monthly (Summary)' : `real-time (Itemized, data up to ${shortDate(until || (m && m.itemized_last))})`;
       const invTxt = Inv ? (res.inventoryOlder ? `SIM Group of ${shortDate(Inv.parsed.exportedAt)} kept as history (older than the loaded one)` : `${n0(res.inventory.sims.length)} SIMs in the SIM Group`) : '';
       const frozeTxt = res.frozenNow ? ` · ${n0(res.frozenNow)} closed cycle(s) frozen` : '';
-      window.showToast(`✅ VI ${U ? what : ''}${label ? ' ' + label : ''}${m ? ': ' + n0(sims.size) + ' SIMs · ' + gb(usage) : ''}${invTxt ? (U ? ' · ' : '') + invTxt : ''}${recon}${frozeTxt} · ${cloudMsg}`, cloudMsg.startsWith('NOT') ? 'error' : 'success');
+      const extraTxt = extraMonths.length ? ` · also ${extraMonths.map(x => x.label).join(', ')} (every day of the cycle)` : '';
+      window.showToast(`✅ VI ${U ? what : ''}${label ? ' ' + label : ''}${m ? ': ' + n0(sims.size) + ' SIMs · ' + gb(usage) : ''}${extraTxt}${invTxt ? (U ? ' · ' : '') + invTxt : ''}${recon}${frozeTxt} · ${cloudMsg}`, cloudMsg.startsWith('NOT') ? 'error' : 'success');
       UI.renderUploads();
       await loadNeededDaily();
       await syncOps({ unsaved: saveFailed });
@@ -399,8 +417,12 @@
     const c = V.cycleForLabel(label);
     if (!V.state.months[label]) return;
     if (!confirm(`Delete the VI ${label} cycle${c ? ` (${shortDate(c.start)} – ${shortDate(c.end)})` : ''}?\n\nIts usage is removed for everyone. The upload history keeps a record, and the same files can be uploaded again.`)) return;
+    // the uploads that filled it — one Itemized report can fill two cycles but is recorded under one of them
+    const src = V.state.months[label].sources || {};
+    const ids = [src.summary, src.itemized].map(s => s && s.batch_id).filter(Boolean);
     const r = await C().deletePeriod('vi', label);
     if (!r.deleted) { window.showToast('❌ Could not delete: ' + ((r.error && r.error.message) || r.reason || 'unknown error'), 'error'); return; }
+    if (ids.length) await C().markBatches(ids, 'deleted', { deleted_cycle: label });   // so the same file can be uploaded again
     if (P.selectedMonth() === label) P.selectMonth('latest');
     V.removeMonth(label);                              // also drops that cycle's pool evaluations
     if (C().state.ready && canEdit()) await C().deletePoolSnapshots('vi', label);
@@ -484,9 +506,83 @@
       bits.push(`SIM Group of ${shortDate(p.snapshot_at)}${p.frozen ? ' (frozen)' : ''}: ${byState} · ${n0(p.eligible_sims)} SIMs in the pool`);
     } else if (!same) bits.push(`${n0((ds.rtRows || []).filter(r => r.in_pool).length)} SIMs in the pool on ${shortDate(at)}`);
     else if (p.needsInventory) bits.push('no SIM Group file yet — usage only; upload SIMGROUP*.csv for the pool');
-    // The pool may already use a newer Data Usage Summary — this tab stays on the Itemized report
-    if (p.hasPool && p.usage_src === 'summary' && !ds.asOf) bits.push(`the Data Pool's used data comes from the newer Data Usage Summary (to ${shortDate(p.data_date)}${!same ? ', ' + ds.poolMonth + ' cycle' : ''}) — upload the newest Itemized report to bring this tab up to date`);
+    // The pool may already use a newer Data Usage Summary of the same cycle — this tab stays on the Itemized report
+    // (a newer cycle: the banner above the cards says so)
+    if (same && p.hasPool && p.usage_src === 'summary' && !ds.asOf) bits.push(`the Data Pool's used data comes from the newer Data Usage Summary (to ${shortDate(p.data_date)}) — upload the newest Itemized report to bring this tab up to date`);
     return bits.join(' · ');
+  }
+  // The Real-time tab when its Itemized cycle is not the pool's (current) cycle: a historical report, said in its title
+  // and in a banner with the current cycle's pool next to it — never shown as "current" (14 Oct 2026)
+  const range = c => (c ? `${shortDate(c.start)} – ${shortDate(c.end)}` : '');
+  const g2 = v => (v == null || !isFinite(v) ? '—' : (Math.round(v * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' GB');
+  const pc2 = v => (v == null || !isFinite(v) ? '—' : (Math.round(v * 100) / 100).toFixed(2) + '%');
+  const historical = ds => { const it = ds && ds.context && ds.context.itemized; return !!(it && !it.same_as_pool); };
+  function rtTitle(ds) {
+    const it = ds && ds.context && ds.context.itemized;
+    return historical(ds) ? `Latest Itemized data — ${range(it.cycle)} (${it.complete ? 'historical' : 'older cycle'})` : null;
+  }
+  function rtBanner(ds) {
+    const ctx = ds && ds.context; if (!ctx || !ctx.itemized) return '';
+    const it = ctx.itemized, pc = ctx.pool, p = ds.pool || {}, out = [];
+    if (historical(ds)) {
+      const head = `📜 <b>Latest Itemized data: ${esc(it.label)} cycle, ${esc(range(it.cycle))}</b>${it.complete ? ' — complete' : ` — data to ${esc(shortDate(it.data_through))}`}. This is <b>not the current billing cycle</b>: the cards and the table below describe ${esc(it.label)} only.`;
+      // the pool's cycle is the current one unless it has ended (no data of the new cycle yet)
+      const isCur = !!(pc && ctx.current && pc.label === ctx.current.label);
+      const why = pc ? `${isCur ? 'The current cycle' : 'The newest cycle with usage'} (${esc(pc.label)}: ${esc(range(pc.cycle))}${isCur ? '' : ', closed'}) has no Itemized report yet${pc.source ? ` — its usage comes from the ${esc(pc.source)}` : ''}. Upload the newest Itemized report to see each SIM's ${isCur ? 'current ' : ''}usage here.` : '';
+      const cur = p.hasPool && pc ? `<div class="rt-b-cur"><span class="rt-b-k">${isCur ? 'Current cycle' : 'Newest cycle with usage (closed)'} · ${esc(pc.label)} · shared pool</span>
+          <span><b>${g2(p.capacity_gb)}</b> pool</span><span><b>${g2(p.used_gb)}</b> used (${pc2(p.util_pct)})</span><span><b>${g2(Math.abs(p.remaining_gb))}</b> ${p.remaining_gb < 0 ? 'over the pool' : 'remaining'}</span>
+          <span class="rt-b-src">${esc(pc.source || '')}${pc.data_through ? ' to ' + esc(shortDate(pc.data_through)) : ''}${pc.day ? ` · day ${n0(pc.day)} of ${n0(pc.cycle ? pc.cycle.days : '')}` : ''}</span>
+          <button type="button" class="ps-link" onclick="ProvidersUI.openCalc('vi')">🧮 Calculation details</button></div>` : '';
+      out.push(`<div class="rt-b-h">${head}</div>${why ? `<div class="rt-b-s">${why}</div>` : ''}${cur}`);
+    }
+    if (it.late_group_days) out.push(`<div class="rt-b-warn">⚠ The ${esc(it.label)} allocations below come from the SIM Group file of ${esc(shortDate(it.sim_group))} — ${n0(it.late_group_days)} days after the cycle ended — so SIMs that went live after ${esc(shortDate(it.cycle && it.cycle.end))} are counted in it. Upload the SIM Group file nearest ${esc(shortDate(it.cycle && it.cycle.end))}${it.frozen ? ', then ↻ Recompute the cycle on the Uploads tab' : ' — it is used at once'}.</div>`);
+    return out.length ? `<div class="rt-banner${historical(ds) ? ' rt-b-hist' : ''}" role="note">${out.join('')}</div>` : '';
+  }
+  // Calculation details: every figure on screen with its source, billing cycle, SIMs and formula, side by side
+  function calcRows(ds) {
+    const ctx = ds && ds.context; if (!ctx) return null;
+    const p = ds.pool || {}, f = p.forecast || {}, pc = ctx.pool, it = ctx.itemized, rows = [], notes = [];
+    const row = (metric, value, source, cycle, sims, calc) => rows.push({ metric, value, source, cycle, sims, calc });
+    if (ctx.current) row('Current billing cycle', `${ctx.current.label}`, 'VI bills 22nd → 21st (usage resets on the 22nd)', range(ctx.current), '—', `Today ${shortDate(ctx.today)} = day ${ctx.current.day} of ${ctx.current.days}`);
+    if (p.hasPool && pc) {
+      const cy = range(pc.cycle), notCounted = n0(p.inventory_sims - p.eligible_sims), closed = !!(p.complete || f.ended);
+      const states = Object.entries(p.states || {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n0(n)} ${k}`).join(', ');
+      const full = (p.plan_mix || []).map(m => `${n0(m.sims)} × ${n0(m.gb)} GB`).join(' + ');
+      const pro = p.prorated && p.prorated.sims ? `${n0(p.prorated.sims)} SIMs started during the cycle: plan ÷ ${V.PRORATE_DAYS} × days left = ${g2(p.prorated.gb)}` : 'no SIM started during the cycle';
+      // a frozen cycle counts with the rules it was frozen with
+      const est = (p.frozen && p.frozen.eligible_states) || (p.rules && p.rules.eligible_states) || [];
+      row('Total pool', g2(p.capacity_gb), `SIM Group file of ${shortDate(p.snapshot_at)}${p.frozen ? ' (frozen)' : ''} + pool rules`, cy, `${n0(p.eligible_sims)} counted of ${n0(p.inventory_sims)} (${states})`,
+        `Σ each counted SIM's allocation this cycle. Full cycle: ${full || '—'}; ${pro}. Counts: state "${est.join('", "')}"${p.frozen ? ' (the rules it was frozen with)' : ''} on a data-pool deal (${(p.rules && p.rules.pool_tag) || ''}); the other ${notCounted} do not.`);
+      row('Used', g2(p.used_gb), `${pc.source || '—'}${pc.data_through ? ' to ' + shortDate(pc.data_through) : ''}`, cy, `${n0(p.eligible_sims)} counted SIMs`,
+        `Σ usage of the counted SIMs, cycle to date. Usage by SIMs that do not count (${g2(p.non_pool_usage_gb)}) is not in it — it is flagged separately.`);
+      row('Remaining', g2(p.remaining_gb), '—', cy, '—', `Total pool − Used = ${g2(p.capacity_gb)} − ${g2(p.used_gb)}`);
+      row('Used %', pc2(p.util_pct), '—', cy, '—', `Used ÷ Total pool`);
+      if (f.pace) row('Pace', `${g2(f.pace.burn_gb_day)} a day`, pc.source || '—', cy, `${n0(f.pace.sims_now)} SIMs`, `${g2(f.pace.gb_sim_day)} per SIM per day × ${n0(f.pace.sims_now)} SIMs${f.pace.basis === 'cycle' ? ` — the average since ${shortDate(pc.cycle && pc.cycle.start)} (no earlier upload of this cycle to compare)` : ''}`);
+      else if (f.avg_gb_day != null) row('Pace', `${g2(f.avg_gb_day)} a day`, pc.source || '—', cy, '—', `Used ÷ ${n0(p.days_elapsed)} days`);
+      if (closed) row('Cycle closed', p.remaining_gb < 0 ? `over the pool by ${g2(-p.remaining_gb)}` : `${g2(p.remaining_gb)} left unused`, '—', cy, '—', 'Total pool − Used at the end of the cycle');
+      else {
+        if (f.projected_gb != null) row('Projected by the cycle end', `${g2(f.projected_gb)} (${pc2(f.projected_pct)})`, '—', cy, '—', `Used + pace × the SIM-days left after ${shortDate(f.data_day || pc.data_through)} (${n0(f.days_left)} days)`);
+        row('Pool lasts', f.exhaustion_date ? `until ~${shortDate(f.exhaustion_date)}` : 'the whole cycle', '—', cy, '—', f.lasts_days === Infinity ? 'no usage yet' : `Remaining ÷ pace = ${(Math.round(f.lasts_days * 10) / 10)} days vs ${n0(f.days_left)} days left`);
+      }
+      const sc = pc.start_check, win = sc ? `${shortDate(sc.from)} – ${shortDate(sc.limit)}` : '';
+      if (sc) row('Start days', sc.verified ? 'verified' : `${n0(sc.sims)} SIMs not verified`, `SIM Group files: ${n0(ctx.sim_groups.count)} (oldest ${shortDate(ctx.sim_groups.oldest)})`, cy, sc.verified ? '—' : `${n0(sc.sims)} SIMs · ${g2(sc.gb)}`,
+        sc.verified ? (sc.near_export ? `The SIM Group file of ${shortDate(sc.near_export)} (${win}) is loaded: a SIM Ready in one file and active in a later one starts on its first day with data.` : 'Every counted SIM starts after the cycle start or has a detected go-live day.')
+          : `VI's DATE_OF_ACTIVATION is the day a SIM was loaded on the account and does not change when it goes live. No SIM Group file from ${win} is loaded, so these SIMs get their full plan; any that went live after ${shortDate(pc.cycle && pc.cycle.start)} are over-counted.`);
+    }
+    if (it) {
+      // the whole VI Itemized report — the Real-time tab's client, status, plan and search filters are not applied here
+      const rt = (ds.rtRows || []), sum = k => rt.reduce((a, r) => a + (r[k] || 0), 0) / 1024, withAlloc = rt.filter(r => r.alloc_mb > 0).length;
+      const cy = range(it.cycle), tag = it.same_as_pool ? '' : ' — not the current cycle';
+      row('Real-time · Allocated (all VI SIMs)', g2(sum('alloc_mb')), `SIM Group file of ${shortDate(it.sim_group)}${it.frozen ? ' (frozen)' : ''}${it.late_group_days ? ` — ${n0(it.late_group_days)} days after the cycle` : ''}`, cy + tag, `${n0(withAlloc)} with an allocation of ${n0(rt.length)} listed`,
+        `Σ each SIM's allocation in the ${it.label} cycle (full plan, or plan ÷ ${V.PRORATE_DAYS} × days from its start). A SIM-level figure — not the shared pool.`);
+      row('Real-time · Used (all VI SIMs)', g2(sum('used_mb')), `Itemized report${it.data_through ? ' to ' + shortDate(it.data_through) : ''}`, cy + tag, `${n0(rt.length)} SIMs in the report — Real-time filters not applied`, `Σ each SIM's daily usage ${cy}`);
+      row('Real-time · Available (all VI SIMs)', g2(sum('avail_mb')), '—', cy + tag, '—', 'Allocated − Used (counted SIMs only)');
+      notes.push('The Real-time rows above are for every VI SIM in the report; the cards on the Real-time tab follow its client, status, plan and search filters.');
+      if (!it.same_as_pool) notes.push(`The Real-time tab shows the ${it.label} cycle; the pool shows ${pc ? pc.label : 'another cycle'}. Their figures are different cycles and reports — they are never added together or compared.`);
+    }
+    if (ctx.monthly) row('Month-wise tabs', ctx.monthly.label, `Data Usage Summary${ctx.monthly.data_through ? ' to ' + shortDate(ctx.monthly.data_through) : ''}`, range(ctx.monthly.cycle), '—', 'Vehicle Wise, Exceeded, Plan Summary, Downgrade, Trends and Price Analysis use the Month filter\'s cycle (Latest = this one).');
+    notes.push('The Data Usage Summary and the Itemized report are never added: the pool uses whichever reaches the later day; the Real-time tab uses the Itemized report only.');
+    return { title: 'VI — calculation details', rows, notes };
   }
 
   /* ── "as of" day: the Real-time tab's date picker (Airtel has dated snapshots; VI has every day) ── */
@@ -716,7 +812,8 @@
   // Register with the shared UI — nothing else needs to know VI exists
   cfg.uploadUi = 'vi-upload-ui';
   cfg.upload = { mount, render, canProcess, process, syncMode };
-  cfg.ui = { reconSection, rtInfo, rtControls, pickDay, vsumExtra, afterVsum, statusRuleControl, poolHeaderExtra, simModel, alertHistory, searchCard };
+  cfg.ui = { reconSection, rtInfo, rtControls, pickDay, vsumExtra, afterVsum, statusRuleControl, poolHeaderExtra, simModel, alertHistory, searchCard,
+    rtTitle, rtBanner, calcRows };
   cfg.boot = boot;
   window.ViUI = { pick: e => addFiles(e.target.files), drop: e => { e.preventDefault(); const s = $('slot-vi'); if (s) s.classList.remove('drag-over'); addFiles(e.dataTransfer.files); },
     addFiles, remove: t => { delete st.files[t]; render(); check(); }, setMonth: l => { st.month = l; st.monthTouched = true; render(); check(); },

@@ -267,6 +267,18 @@
   // The day a provider's real-time figures are "as of" when it isn't the latest (VI day picker), else null
   const rtAsOf = () => ((lastView && lastView.parts) || []).map(p => p.ds.asOf).filter(Boolean)[0] || null;
   const rtExportTag = () => { const d = rtAsOf(); return d ? '_as-of-' + d : ''; };
+  // The period each provider's real-time rows cover (14 Oct 2026). A provider's rtTitle hook names an older, historical
+  // report (VI: an Itemized cycle before the pool's current one); without one the rows are its current figures.
+  function rtPeriods(view) {
+    const v = view || lastView;
+    return ((v && v.parts) || []).filter(p => (p.ds.rtRows || []).length).map(p => {
+      const cfg = P[p.c] || {}, ui = cfg.ui || {};
+      const title = typeof ui.rtTitle === 'function' ? ui.rtTitle(p.ds) || null : null;
+      const it = p.ds.context && p.ds.context.itemized;
+      return { code: p.c, short: cfg.short || p.c, historical: !!title, title,
+        period: it && it.label ? `${it.label} cycle${title ? ' (historical)' : ''}` : p.ds.rtLatest === false ? 'older saved snapshot' : 'latest snapshot' };
+    });
+  }
   function statusOptions() {
     const s = new Set();
     const v = lastView;
@@ -283,7 +295,7 @@
     selectedMonth: () => selectedMonth, selectMonth, onMonthChange, monthsInView, monthKey, sortMonths,
     normKey, fleet, onFleetChange, onDataChange, setReady, isReady,
     ingestAirtel, ingestAirtelRt, setDataset, clearDataset, raw, refresh, buildView, currentView,
-    tiers, priceFor, rates, zeroAllocFlag, badge, searchHit, exportPack, exportName, rtAsOf, rtExportTag, statusOptions,
+    tiers, priceFor, rates, zeroAllocFlag, badge, searchHit, exportPack, exportName, rtAsOf, rtExportTag, rtPeriods, statusOptions,
     registerPlanLabel, planLabel, claimedByOthers, emptyDataset,
   };
 
