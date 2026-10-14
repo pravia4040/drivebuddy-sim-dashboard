@@ -29,7 +29,7 @@ In the Claude desktop app the same two servers are in the workspace launch list 
 * **Real** mode reads and writes your live Supabase project. Airtel uploads go to the same tables as the live site. VI saves need `sql/001_multi_provider.sql` first; without it VI works for the browser session only and says so.
 * **VI test page (mock only): `http://127.0.0.1:8790/vi-test.html`** — the dashboard with a small "🧪 VI test page" panel. On first open it uploads the VI files in `D:\DBAI-SIM\vi-test-data\` through the normal upload dialog, the way a user would: Sep 2026 (Summary + SIM Group of 25 Sep, then Itemized), Oct 2026 (Summary of 27 Sep + SIM Group of 28 Sep, then Itemized of 27 Sep), then the 6 Oct Summary + SIM Group. It switches to VI and lists what to try, with the expected figures. "Reset test data" empties the mock database and loads the files again. The folder sits next to the repo on purpose — real SIM data never goes into git; `--fixtures DIR` points the server at another folder. In real mode the page does not exist.
 * `/baseline.html` (both modes) serves `index.html` from `main`, for side-by-side comparison.
-* `/tests/providers.test.html` runs the unit tests (330).
+* `/tests/providers.test.html` runs the unit tests (332).
 * `?mockNo002=1` behaves as if `sql/002_vi_pool.sql` had not been run (SIM Group history and frozen cycles then last for the session only, and the Uploads tab says so).
 * `?mockNo003=1` behaves as if `sql/003_vi_operations.sql` had not been run (pool forecast history and the alert history then last for the session only).
 * `?mockNo004=1` behaves as if `sql/004_vi_scale.sql` had not been run (the 001–003 save and load paths); `?mockNo005=1` behaves as if `sql/005_sim_search.sql` had not been run (the SIM search then runs over the SIMs loaded in the browser); `?mockMem=1` keeps the mock database in memory only; `?mockFail=provider_state_runs` (any tables or functions, comma-separated) makes those reads time out — the start-up then retries, warns and saves nothing worked out without them.
@@ -300,7 +300,7 @@ Intended differences, by design:
 | — | The account owner's example (869 → 4,000 GB a day) | forecast moves with each upload | one 4,000 GB day: runs out 19 → 13 Oct, backup 2,460 → 11,690 GB, pop-up again ('worse than the last alert'); a second such day: jump pace 12.27 GB per SIM a day = 4,000 GB a day, runs out 9 Oct, backup 55,780 GB | ✅ |
 | — | Scale rehearsal 1K / 5K / 10K / 20K SIMs | exact pool and used figures at every size | exact; rebuild 34 / 144 / 297 / 623 ms; Data Pool tab 151–331 ms (paged lists); start-up 9 / 23 / 40 / 74 reads; every call ≤ 8,000 rows (~1 MB) | ✅ |
 | — | Corrected Itemized re-upload | the cloud holds exactly the new file's days | 23 Sep doubled in the new file: cloud and browser equal day by day; 1 call (changed + newest days) | ✅ |
-| — | Unit tests (`tests/providers.test.html`) | pass | 330/330 (incl. 41 for the operations work, 58 for the per-SIM pace, 2-day Critical, re-alert, cycle end, fleet growth, heavy day / jump rules and review fixes, 20 for the universal SIM search, and 19 for the cycle consistency fix) | ✅ |
+| — | Unit tests (`tests/providers.test.html`) | pass | 332/332 (incl. 41 for the operations work, 58 for the per-SIM pace, 2-day Critical, re-alert, cycle end, fleet growth, heavy day / jump rules and review fixes, 20 for the universal SIM search, and 21 for the cycle consistency fix) | ✅ |
 | — | Colour palette validator | pass all-pairs, dark surfaces | pass on #141414, #111111, #0E0E0E | ✅ |
 
 ---
