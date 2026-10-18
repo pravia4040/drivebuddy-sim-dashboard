@@ -234,7 +234,7 @@
     const pr = pool.prorated && pool.prorated.sims ? `${sims(pool.prorated.sims)} pro-rated (${g2(pool.prorated.gb)})` : '';
     return [full, pr].filter(Boolean).join(' + ') || sims(pool.pooled_sims);
   }
-  const SRC = { vi_date: 'activation date', detected: 'detected go-live' };
+  const SRC = { vi_date: 'activation date', detected: 'detected go-live', estimated: 'first data use (estimated)' };
   // How the pool is built: full-cycle SIMs + each start day's pro-rated SIMs — shown even when every SIM
   // gets its full plan, so "85 GB → this cycle's data" is always visible
   function prorationTable(cfg, pool) {
@@ -242,7 +242,7 @@
     if (!pr || !(pr.sims || (pool.plan_mix || []).length)) return '';
     const days = pool.days_total || (pool.cycle && pool.cycle.days) || '';
     const rows = (pool.plan_mix || []).map(m => `<tr><td>Full cycle · ${esc(gb(m.gb))} plan</td><td class="num">${n0(m.sims)}</td><td class="num">${days}</td><td class="num">${g2(m.gb)}</td><td class="num">${g2(m.gb * m.sims)}</td></tr>`)
-      .concat(pr.groups.map(g => `<tr><td>${g.src === 'detected' ? 'Went live' : 'Activated'} ${esc(shortDate(g.from))} · ${esc(gb(g.plan_gb))} plan${g.src === 'detected' ? ' <span class="pv-muted">(detected)</span>' : ''}</td><td class="num">${n0(g.sims)}</td><td class="num">${g.days}</td><td class="num">${g.days} × ${g2(g.per_day_gb)} = ${g2(g.gb)}</td><td class="num">${g2(g.total_gb)}</td></tr>`)).join('');
+      .concat(pr.groups.map(g => `<tr><td>${g.src === 'detected' || g.src === 'estimated' ? 'Went live' : 'Activated'} ${esc(shortDate(g.from))} · ${esc(gb(g.plan_gb))} plan${g.src === 'detected' ? ' <span class="pv-muted">(detected)</span>' : g.src === 'estimated' ? ' <span class="pv-muted">(first data use)</span>' : ''}</td><td class="num">${n0(g.sims)}</td><td class="num">${g.days}</td><td class="num">${g.days} × ${g2(g.per_day_gb)} = ${g2(g.gb)}</td><td class="num">${g2(g.total_gb)}</td></tr>`)).join('');
     return `<div class="pv-card"><div class="pv-card-t">How the pool is built · ${esc(pool.cycle ? pool.cycle.label + ' cycle' : '')}${days ? ` (${days} days)` : ''} <span class="pv-muted">· started before the cycle = full plan; during the cycle = plan ÷ ${pr.divisor_days} per day left, start day included${pr.sims ? '' : ' — no SIM started during this cycle'}. Start = the SIM Group's activation date, or the detected go-live day of a SIM that was Ready in an older SIM Group file.</span></div>
       <div class="tw"><table class="pv-table"><thead><tr><th>SIMs</th><th class="num">Count</th><th class="num">Days in cycle</th><th class="num">Allocation per SIM</th><th class="num">Allocated</th></tr></thead>
       <tbody>${rows}<tr><td class="pv-tot">Total pool</td><td class="num pv-tot">${n0(pool.pooled_sims)}</td><td></td><td></td><td class="num pv-tot">${g2(pool.capacity_gb)}</td></tr></tbody></table></div></div>`;
@@ -547,7 +547,7 @@
   const opsTables = {};
   const ZCAT = { new: 'Newly activated', no_usage: 'No usage', long_term: 'Long-term no usage' };
   const ZERO_HEAD = ['ICCID', 'Mobile', 'Vehicle', 'Status', 'Activation (VI)', 'Counts from', 'Days since start', 'Last usage', 'Days without data', 'Category', 'Plan cost (₹/month)', 'Recommended action'];
-  const zeroCells = z => [z.iccid, z.msisdn, z.reg, z.state, z.vi_date || '', z.start ? `${z.start}${z.src === 'detected' ? ' (detected)' : ''}` : '', z.days_since_start == null ? '' : z.days_since_start,
+  const zeroCells = z => [z.iccid, z.msisdn, z.reg, z.state, z.vi_date || '', z.start ? `${z.start}${z.src === 'detected' ? ' (detected)' : z.src === 'estimated' ? ' (first data use)' : ''}` : '', z.days_since_start == null ? '' : z.days_since_start,
     z.last_use || 'None in uploaded reports', z.idle_days == null ? '' : z.idle_days, ZCAT[z.category], z.price == null ? '' : z.price, z.action];
   function zeroCard(cfg, pool) {
     const z = pool.zero; if (!z) return '';
@@ -700,7 +700,7 @@
       <div class="pv-sim-h"><i style="background:${cfg.color}"></i><div><div class="pv-sim-t">SIM ${esc(M.iccid)}</div><div class="pv-muted">${esc(M.msisdn ? 'Mobile ' + M.msisdn : '')}${M.reg ? ' · ' + esc(M.reg) : ''}${M.client ? ' · ' + esc(M.client) : ''}</div></div></div>
       <div class="vsum-detail-grid">
         ${det('SIM number', `<span class="mono">${esc(M.iccid)}</span>`)}${det('Mobile number', `<span class="mono">${esc(M.msisdn || '—')}</span>`)}${det('Provider', esc(cfg.name || cfg.short))}
-        ${det('Status', esc(M.state || '—'))}${det('Activation date (VI)', esc(M.vi_date ? shortDate(M.vi_date) : '—'))}${det('Counts from', esc(a && a.start ? `${shortDate(a.start)}${a.src === 'detected' ? ' (detected go-live)' : ''}` : '—'))}
+        ${det('Status', esc(M.state || '—'))}${det('Activation date (VI)', esc(M.vi_date ? shortDate(M.vi_date) : '—'))}${det('Counts from', esc(a && a.start ? `${shortDate(a.start)}${a.src === 'detected' ? ' (detected go-live)' : a.src === 'estimated' ? ' (first data use, estimated)' : ''}` : '—'))}
         ${det('Plan', esc(M.plan_gb ? `${M.plan_gb} GB / ${M.plan_days || 30} days${M.price != null ? ` · ₹${M.price}` : ''}${M.pooled ? ' · data pool' : ''}` : 'no data plan'))}
         ${det('Billing cycle', `<select class="fsel" onchange="ProvidersUI.simSetCycle(this.value)" aria-label="Billing cycle">${M.cycles.map(c => `<option value="${esc(c.label)}"${c.label === label ? ' selected' : ''}>${esc(shortDate(c.cycle.start))} → ${esc(shortDate(c.cycle.end))}</option>`).join('')}</select>`)}
         ${det('Eligible days', esc(a && a.eligible ? (a.days == null ? `${C.cycle.days} (full cycle)` : String(a.days)) : 'not in the pool'))}
@@ -782,7 +782,7 @@
   // SIM-wise allocation: every SIM of the cycle's SIM Group (+ SIMs with usage missing from it); search + CSV
   const simTables = {};
   const SIM_HEAD = ['ICCID', 'Mobile', 'Vehicle', 'Status', 'In pool', 'Activation (VI)', 'Counts from', 'Plan (GB)', 'Days', 'GB / day', 'Allocation (GB)', 'Used (GB)', 'Remaining (GB)', 'Usage %', 'Why not counted'];
-  const simCells = r => [r.iccid, r.msisdn, r.reg, r.state, r.in_pool ? 'Yes' : 'No', r.vi_date || '', r.start ? `${r.start}${r.src === 'detected' ? ' (detected)' : ''}` : '',
+  const simCells = r => [r.iccid, r.msisdn, r.reg, r.state, r.in_pool ? 'Yes' : 'No', r.vi_date || '', r.start ? `${r.start}${r.src === 'detected' ? ' (detected)' : r.src === 'estimated' ? ' (first data use)' : ''}` : '',
     r.plan_gb || '', r.days == null ? '' : r.full ? `${r.days} (full)` : r.days, r.per_day == null ? '' : g2n(r.per_day), r.in_pool ? g2n(r.alloc_gb) : '0',
     g2n(r.used_gb), r.remaining_gb == null ? '' : g2n(r.remaining_gb), r.usage_pct == null ? '' : r.usage_pct.toFixed(1) + '%', r.in_pool ? '' : r.reason];
   function simCard(cfg, pool) {

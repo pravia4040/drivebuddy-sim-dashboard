@@ -390,6 +390,16 @@ const sNoDate={as_of:'2026-09-28 13:56:32',sims:V.parseFile(inv([GA('active').re
 const pN=bd({inventory:sNoDate,months:{'Oct 2026':mO},fleet,today:D14}).pool;
 eq([sNoDate.sims.length,pN.capacity_gb,pN.alerts.some(a=>a.code==='no_date')],[1,85,true],'a SIM with no activation date in the SIM Group: counted at the full plan, and flagged');
 
+group('start days from the newest files only (18 Oct 2026): no SIM Group file from around the cycle start');
+const eA=bd({inventory:s13,months:{'Sep 2026':m,'Oct 2026':mO},fleet,today:D14}).pool, eS=eA.sim_table.find(r=>r.iccid==='8991000000000000021');
+eq([eS.src,eS.start,Math.round(eS.alloc_gb*100)/100,eA.start_check.estimated],['estimated','2026-09-26',73.67,1],'no data in the Sep cycle, first data 26 Sep → starts 26 Sep: 26 × 2.83 = 73.67 GB (estimated, not the full 85 GB)');
+ok(eA.alerts.some(a=>a.code==='start_estimated'),'…and the dashboard says the start comes from the usage data');
+const mUsedSep=V.mergeMonth(null,{summary:V.parseFile(sum([`${E},1,915700000000021,404000000000021,~8991000000000000021,1130499,1048576.0000,GUJ_HOME,2026-09-10 10:00:00,3`]),'s.csv')},'Sep 2026');
+const eB=bd({inventory:s13,months:{'Sep 2026':mUsedSep,'Oct 2026':mO},fleet,today:D14}).pool, eBs=eB.sim_table.find(r=>r.iccid==='8991000000000000021');
+eq([eBs.src,eB.capacity_gb,eB.start_check.verified],['vi_date',85,true],'it used data in the Sep cycle → it was live before: full 85 GB, verified');
+eq(bd({inventory:s13,months:{'Oct 2026':mO},fleet,today:D14}).pool.sim_table.find(r=>r.iccid==='8991000000000000021').src,'vi_date','no earlier cycle loaded at all → cannot tell: VI\'s date (flagged), never a guess');
+eq(bd({inventory:s13,snapshots:[s25,s13],months:{'Sep 2026':m,'Oct 2026':mO},fleet,today:D14}).pool.sim_table.find(r=>r.iccid==='8991000000000000021').src,'detected','with the 25 Sep SIM Group file the exact history is used, not the estimate');
+
 group('pool used = the newest report (decided 6 Oct 2026); Real-time tab and daily charts stay on the Itemized report');
 eq([ds.pool.usage_src,ds.pool.data_date],['itemized','2026-09-21'],'Summary and Itemized both reach 21 Sep → the Itemized report');
 const dNa22=bd({inventory,months:{'Sep 2026':mU2},fleet,asOf:'2026-08-22'});

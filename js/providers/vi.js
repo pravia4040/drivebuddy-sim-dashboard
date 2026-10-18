@@ -674,7 +674,7 @@
   // missing: Map label → Set of SIMs whose daily figures that cycle are not loaded (vi-ui loads just those SIMs)
   const simDaily = (m, iccid) => (m.daily ? m.daily[iccid] || {} : m.dailySims && m.dailySims[iccid] !== undefined ? m.dailySims[iccid] || {} : null);
   function firstUseFn(months, missing) {
-    return (iccid, from, to) => {
+    const fn = (iccid, from, to) => {
       let best = null, est = null;
       Object.values(months || {}).forEach(m => {
         if (!m || !m.period_start || m.period_end < from || m.period_start > to) return;
@@ -690,13 +690,35 @@
       if (best && (!est || best <= est)) return { date: best, how: 'first_use' };
       return est ? { date: est, how: 'summary' } : null;
     };
+    // Did the SIM use data in a cycle that ended before day d? null = no earlier cycle with usage is loaded (cannot tell)
+    fn.before = (iccid, d) => {
+      let seen = false;
+      for (const m of Object.values(months || {})) {
+        if (!m || !m.period_end || m.period_end >= d) continue;
+        const used = usedIndex(m); if (!used.size) continue;
+        seen = true;
+        if (used.has(iccid)) return true;
+      }
+      return seen ? false : null;
+    };
+    return fn;
+  }
+  // SIMs with any usage in one cycle's reports (cached per month)
+  const usedIdx = new WeakMap();
+  function usedIndex(m) {
+    let s = usedIdx.get(m);
+    if (!s) { s = new Set((m.rows || []).filter(r => (r.summary_mb || 0) > 0 || (r.itemized_mb || 0) > 0).map(r => r.iccid)); usedIdx.set(m, s); }
+    return s;
   }
   // When does a SIM start counting? VI's DATE_OF_ACTIVATION is the day it was loaded on the account (Ready SIMs
   // have one too), so a SIM seen Ready in an older SIM Group and active in a later one started in between:
   // its first day with data after the Ready file (Itemized; else bounded by the Summary), else the date of the file
   // that first shows it active.
   // points = the SIM's state history (stateHistory), up to and including the export `until`
-  function goLive(x, points, until, firstUse, cyc) {
+  // estimate: no SIM Group file from around the cycle start is loaded (18 Oct 2026) — then a SIM never seen Ready, loaded
+  // before the cycle, that used no data in an earlier cycle starts on its first day with data this cycle (Itemized);
+  // one with data in an earlier cycle was live before (full plan); one with no data at all keeps VI's date (flagged)
+  function goLive(x, points, until, firstUse, cyc, estimate) {
     const vi = x.activated_at ? String(x.activated_at).slice(0, 10) : null;
     let readyAt = null, activeAt = null;
     (points || []).forEach(p => {
@@ -704,7 +726,13 @@
       if (isPrelive(p.st)) { readyAt = p.at; activeAt = null; }
       else if (readyAt && !activeAt && ruleFor(p.st)) activeAt = p.at;
     });
-    if (!readyAt || !activeAt) return { date: vi, src: 'vi_date' };
+    if (!readyAt || !activeAt) {
+      if (!estimate || !cyc || !vi || vi > cyc.start || !firstUse || !firstUse.before) return { date: vi, src: 'vi_date' };
+      const before = firstUse.before(x.iccid, cyc.start);
+      if (before !== false) return { date: vi, src: 'vi_date', before };
+      const fu = firstUse(x.iccid, cyc.start, cyc.end);
+      return fu && fu.how === 'first_use' && fu.date > cyc.start ? { date: fu.date, src: 'estimated', how: 'first_use' } : { date: vi, src: 'vi_date', before };
+    }
     const rd = dayOf(readyAt), ad = dayOf(activeAt);
     if (vi && vi > rd) return { date: vi, src: 'vi_date' };          // VI's own date is already after the Ready file
     // live by the cycle start anyway (full plan): no need for its daily figures from an older cycle
@@ -721,16 +749,19 @@
     const out = new Map();
     if (!snap || !snap.sims) return out;
     const h = hist || stateHistory(snaps, state.runs);
+    // no SIM Group file from around the cycle start: start days are estimated from the usage data (goLive)
+    const estimate = !!cyc && !(snaps || []).some(s => { const d = dayOf(s); return d >= addDays(cyc.start, -RULES.ops.start_check_days) && d <= addDays(cyc.start, RULES.ops.start_check_days); });
     snap.sims.forEach(x => {
       const pi = planInfo(x.deal_name, x.base_plan_name), el = eligibility(x, pi);
-      const gl = el.ok ? goLive(x, h.get(x.iccid), snap.as_of, firstUse, cyc) : { date: x.activated_at ? String(x.activated_at).slice(0, 10) : null, src: 'vi_date' };
+      const gl = el.ok ? goLive(x, h.get(x.iccid), snap.as_of, firstUse, cyc, estimate) : { date: x.activated_at ? String(x.activated_at).slice(0, 10) : null, src: 'vi_date' };
       const a = el.ok ? allotment({ pi, activated: gl.date }, cyc) : { gb: 0, days: null, per_day: null };
       const later = el.ok && !!(cyc && gl.date && gl.date > cyc.end);
       const code = later ? 'later' : el.code;
       out.set(x.iccid, { iccid: x.iccid, msisdn: x.msisdn || '', state: x.lifecycle_state || '', eligible: el.ok && !later, code,
         reason: reasonOf(code, x.lifecycle_state || '', gl.date), deal: pi.plan, plan_gb: pi.plan_gb, price: pi.price, pooled: pi.pooled,
         vi_date: x.activated_at ? String(x.activated_at).slice(0, 10) : null, start: gl.date || null, src: gl.src, how: gl.how || null,
-        ready_at: gl.ready_at || null, active_at: gl.active_at || null, gb: later ? 0 : a.gb, days: a.days, per_day: a.per_day });
+        ready_at: gl.ready_at || null, active_at: gl.active_at || null, gb: later ? 0 : a.gb, days: a.days, per_day: a.per_day,
+        used_before: gl.before == null ? null : gl.before });
     });
     return out;
   }
@@ -1220,8 +1251,12 @@
     if (cyc) {
       const from = addDays(cyc.start, -O.start_check_days), limit = addDays(cyc.start, O.start_check_days);
       const nearest = exp.filter(d => d >= from && d <= limit);
-      const list = nearest.length ? [] : pooled.filter(s => s.src !== 'detected' && (!s.start || s.start <= cyc.start));
-      startCheck = { verified: !list.length, near_export: nearest[0] || null, oldest_export: exp[0] || null, from, limit, sims: list.length, gb: list.reduce((a, s) => a + s.gb, 0) };
+      // still unknown: counted at the full plan from VI's date with no data before the cycle to show it was live (18 Oct
+      // 2026: a SIM with data in an earlier cycle was live before it; one whose first data is this cycle is estimated)
+      const list = nearest.length ? [] : pooled.filter(s => s.src === 'vi_date' && (!s.start || s.start <= cyc.start) && s.used_before !== true);
+      const est = pooled.filter(s => s.src === 'estimated');
+      startCheck = { verified: !list.length, near_export: nearest[0] || null, oldest_export: exp[0] || null, from, limit, sims: list.length, gb: list.reduce((a, s) => a + s.gb, 0),
+        estimated: est.length, estimated_gb: est.reduce((a, s) => a + s.gb, 0), live_before: nearest.length ? 0 : pooled.filter(s => s.used_before === true).length };
     }
     // A closed cycle built from a SIM Group exported long after it ended (a frozen one keeps it until recomputed).
     // A provisional fallback (the cycle's own export still loading) is not "late": the provisional alert says so.
@@ -1471,7 +1506,8 @@
       : `Shared pool projected to run out around ${fmtDate(exhaustion)}, ${gapDays.toFixed(1)} day(s) before the cycle ends (${fmtDate(cyc && cyc.end)}) — ${paceTxt}; short by ${r2(shortfall)} GB → backup ${backup.toLocaleString('en-IN')} GB (incl. ${O.backup_margin_pct}%).`);
     else if (level === 'warning') add('warning', 'pool_warning', `Shared pool tight: ${pct1(projUtil)} projected by ${fmtDate(cyc && cyc.end)} at ${paceTxt}${exhaustion ? ` — runs out around ${fmtDate(exhaustion)}` : ''}.`);
     (issues || []).forEach(t => add('warning', 'load_failed', t));
-    if (startCheck && !startCheck.verified) add('warning', 'start_unverified', `Start days not verified: ${startCheck.sims} of the ${pooled.length} SIMs that count get their full plan from VI's activation date (${r2(startCheck.gb)} GB). VI keeps the day a SIM was loaded on the account even after it goes live, and no SIM Group file from the start of this cycle (${fmtDate(startCheck.from)} – ${fmtDate(startCheck.limit)}) is loaded${startCheck.oldest_export ? ` — the oldest is from ${fmtDate(startCheck.oldest_export)}` : ''}. SIMs that went live after ${fmtDate(cyc.start)} are over-counted. Upload the SIM Group files from around ${fmtDate(cyc.start)} onwards (oldest first): each SIM's go-live day is then found from them.`);
+    if (startCheck && !startCheck.verified) add('warning', 'start_unverified', `Start days not verified: ${startCheck.sims} of the ${pooled.length} SIMs that count get their full plan from VI's activation date (${r2(startCheck.gb)} GB) — they used no data before or during this cycle that shows when they went live. VI keeps the day a SIM was loaded on the account even after it goes live, and no SIM Group file from the start of this cycle (${fmtDate(startCheck.from)} – ${fmtDate(startCheck.limit)}) is loaded${startCheck.oldest_export ? ` — the oldest is from ${fmtDate(startCheck.oldest_export)}` : ''}. Upload the SIM Group files from around ${fmtDate(cyc.start)} onwards (oldest first) to make them exact.`);
+    if (startCheck && startCheck.estimated) add('info', 'start_estimated', `No SIM Group file from the start of this cycle is loaded, so start days come from the usage data: ${startCheck.live_before} SIM(s) used data in an earlier cycle (live before it — full plan); ${startCheck.estimated} SIM(s) used none before this cycle and start on their first day with data (pro-rated, ${r2(startCheck.estimated_gb)} GB). The SIM Group files from around ${fmtDate(cyc.start)} make them exact.`);
     if (lateGroup > O.freeze_max_days) add('warning', 'late_group', `This cycle ended ${fmtDate(cyc.end)}, but its pool is built from the SIM Group file of ${fmtDate(alloc.snapshot_at)} — ${lateGroup} days later — so SIMs that went live after the cycle may be counted in it. Upload the SIM Group file nearest ${fmtDate(cyc.end)}${alloc.frozen ? ', then ↻ Recompute this cycle (Uploads tab)' : ' — it is used at once'}.`);
     if (ended) add('warning', 'cycle_ended', `The ${curM.label} cycle ended on ${fmtDate(cyc && cyc.end)} without its final usage report (data to ${fmtDate(dataDay)}). Usage has reset — upload the new cycle's reports.`);
     if (cap > 0 && util >= 80 && level !== 'critical' && !ended) add('info', 'high_util', `Pool utilisation ${util.toFixed(2)}% — ${r2(cap - used)} GB left.`);
